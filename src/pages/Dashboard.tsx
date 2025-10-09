@@ -1,28 +1,72 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Trophy, Flame, BookOpen, FlaskConical, Gift, TrendingUp, Target, Award } from 'lucide-react';
 import cryptiqIllustration from '@/assets/cryptiq-learning-illustration.png';
 import { Progress } from '@/components/ui/progress';
+import { supabase } from '@/integrations/supabase/client';
+import { useJietBalance } from '@/hooks/useJietBalance';
+
+interface DashboardStats {
+  quizzesCompleted: number;
+  totalQuizzes: number;
+  totalJIET: number;
+  totalXP: number;
+}
 
 const Dashboard = () => {
   const { user } = useAuth();
+  const { balance: jietBalance } = useJietBalance();
+  const [stats, setStats] = useState<DashboardStats>({
+    quizzesCompleted: 0,
+    totalQuizzes: 6,
+    totalJIET: 0,
+    totalXP: 0
+  });
+  const [loading, setLoading] = useState(true);
 
-  const stats = [
-    { title: 'Quizzes Completed', value: '4', total: '5', icon: BookOpen, color: 'text-primary' },
-    { title: 'Labs Finished', value: '3', total: '4', icon: FlaskConical, color: 'text-accent' },
-    { title: 'Rewards Earned', value: '10', unit: 'coins', icon: Gift, color: 'text-orange-500' },
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      if (!user) return;
+
+      try {
+        setLoading(true);
+        
+        // Fetch quiz completions
+        const { data: quizData, error: quizError } = await supabase
+          .from('quiz_completions')
+          .select('*')
+          .eq('user_id', user.id);
+
+        if (!quizError && quizData) {
+          const completedQuizzes = quizData.length;
+          const totalJIET = quizData.reduce((sum, completion) => sum + (completion.jiet_amount || 0), 0);
+          const totalXP = quizData.reduce((sum, completion) => sum + (completion.score * 10), 0);
+
+          setStats({
+            quizzesCompleted: completedQuizzes,
+            totalQuizzes: 6,
+            totalJIET,
+            totalXP
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching dashboard data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+  }, [user]);
+
+  const statsData = [
+    { title: 'Quizzes Completed', value: stats.quizzesCompleted.toString(), total: stats.totalQuizzes.toString(), icon: BookOpen, color: 'text-primary' },
+    { title: 'JIET Earned', value: stats.totalJIET.toString(), unit: 'JIET', icon: Gift, color: 'text-accent' },
+    { title: 'Total XP', value: stats.totalXP.toString(), unit: 'XP', icon: Trophy, color: 'text-orange-500' },
   ];
 
-  const leaderboardData = [
-    { rank: 1, name: 'Yuvraj', xp: 4500, isUser: false },
-    { rank: 2, name: 'Vishal', xp: 4200, isUser: false },
-    { rank: 3, name: user?.email?.split('@')[0] || 'You', xp: 3000, isUser: true },
-    { rank: 4, name: 'Priya', xp: 2800, isUser: false },
-    { rank: 5, name: 'Arjun', xp: 2500, isUser: false },
-  ];
-
-  const xpProgress = (3000 / 4000) * 100;
+  const xpProgress = stats.totalXP > 0 ? (stats.totalXP / 10000) * 100 : 0;
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto">
@@ -66,7 +110,7 @@ const Dashboard = () => {
                         <Flame className="w-4 h-4 text-orange-500" />
                         Level Progress
                       </span>
-                      <span className="text-muted-foreground">3000 / 4000 XP</span>
+                      <span className="text-muted-foreground">{stats.totalXP} / 10000 XP</span>
                     </div>
                     <Progress value={xpProgress} className="h-2" />
                   </div>
@@ -125,51 +169,24 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Right Column - Leaderboard */}
+        {/* Right Column - HIET Balance */}
         <div className="lg:col-span-1">
           <Card className="border-2">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Award className="w-5 h-5 text-primary" />
-                Leaderboard
+                <Gift className="w-5 h-5 text-accent" />
+                JIET Balance
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
-              {leaderboardData.map((entry) => (
-                <div
-                  key={entry.rank}
-                  className={`flex items-center justify-between p-4 rounded-xl transition-all ${
-                    entry.isUser
-                      ? 'bg-primary/10 border-2 border-primary/50'
-                      : 'bg-muted/50 hover:bg-muted'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
-                        entry.rank === 1
-                          ? 'bg-yellow-500/20 text-yellow-600'
-                          : entry.rank === 2
-                          ? 'bg-slate-400/20 text-slate-600'
-                          : entry.rank === 3
-                          ? 'bg-orange-500/20 text-orange-600'
-                          : 'bg-muted text-muted-foreground'
-                      }`}
-                    >
-                      {entry.rank}
-                    </div>
-                    <span className={`font-medium ${entry.isUser ? 'text-foreground' : 'text-muted-foreground'}`}>
-                      {entry.name}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <span className={`font-semibold ${entry.isUser ? 'text-primary' : 'text-foreground'}`}>
-                      {entry.xp}
-                    </span>
-                    <span className="text-xs text-muted-foreground">XP</span>
-                  </div>
-                </div>
-              ))}
+            <CardContent className="space-y-4">
+              <div className="text-center">
+                <p className="text-4xl font-bold text-accent">{jietBalance.toFixed(2)}</p>
+                <p className="text-sm text-muted-foreground">JIET Tokens</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-bold text-primary">{stats.totalJIET}</p>
+                <p className="text-sm text-muted-foreground">JIET Earned</p>
+              </div>
             </CardContent>
           </Card>
         </div>
