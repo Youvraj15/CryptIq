@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { GraduationCap } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { GraduationCap, Mail } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -11,7 +12,10 @@ const LoginPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const { signIn } = useAuth();
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
+  const [forgotPasswordLoading, setForgotPasswordLoading] = useState(false);
+  const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
+  const { signIn, forgotPassword } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,6 +35,28 @@ const LoginPage = () => {
       toast.error('An unexpected error occurred');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!forgotPasswordEmail) {
+      toast.error('Please enter your email address');
+      return;
+    }
+
+    setForgotPasswordLoading(true);
+    try {
+      const { error } = await forgotPassword(forgotPasswordEmail);
+      if (!error) {
+        setIsForgotPasswordOpen(false);
+        setForgotPasswordEmail('');
+      }
+    } catch (error) {
+      toast.error('An unexpected error occurred');
+    } finally {
+      setForgotPasswordLoading(false);
     }
   };
 
@@ -100,9 +126,56 @@ const LoginPage = () => {
               </div>
               
               <div className="text-right">
-                <a href="#" className="text-accent hover:underline text-sm">
-                  Forgot Password?
-                </a>
+                <Dialog open={isForgotPasswordOpen} onOpenChange={setIsForgotPasswordOpen}>
+                  <DialogTrigger asChild>
+                    <button 
+                      type="button"
+                      className="text-accent hover:underline text-sm cursor-pointer"
+                    >
+                      Forgot Password?
+                    </button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                      <DialogTitle className="flex items-center gap-2">
+                        <Mail className="w-5 h-5 text-accent" />
+                        Reset Password
+                      </DialogTitle>
+                      <DialogDescription>
+                        Enter your email address and we'll send you a link to reset your password.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <form onSubmit={handleForgotPassword} className="space-y-4">
+                      <div>
+                        <Input
+                          type="email"
+                          placeholder="Enter your email address"
+                          value={forgotPasswordEmail}
+                          onChange={(e) => setForgotPasswordEmail(e.target.value)}
+                          className="w-full"
+                          required
+                        />
+                      </div>
+                      <div className="flex gap-2 justify-end">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => setIsForgotPasswordOpen(false)}
+                          disabled={forgotPasswordLoading}
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          type="submit"
+                          disabled={forgotPasswordLoading}
+                          className="bg-accent hover:bg-accent/90"
+                        >
+                          {forgotPasswordLoading ? 'Sending...' : 'Send Reset Link'}
+                        </Button>
+                      </div>
+                    </form>
+                  </DialogContent>
+                </Dialog>
               </div>
               
               <Button 
