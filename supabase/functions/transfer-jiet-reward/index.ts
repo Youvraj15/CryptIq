@@ -1,28 +1,23 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
-import { Connection, Keypair, PublicKey, Transaction, SystemProgram } from "https://esm.sh/@solana/web3.js@1.95.8";
-import { TOKEN_PROGRAM_ID, createTransferInstruction, getAssociatedTokenAddress } from "https://esm.sh/@solana/spl-token@0.4.11";
-import bs58 from "https://esm.sh/bs58@6.0.0";
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "npm:@supabase/supabase-js@2.57.4";
+import { Connection, Keypair, PublicKey, Transaction, SystemProgram } from "npm:@solana/web3.js@1.95.8";
+import { TOKEN_PROGRAM_ID, createTransferInstruction, getAssociatedTokenAddress } from "npm:@solana/spl-token@0.4.11";
+import bs58 from "npm:bs58@6.0.0";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
-// Quiz ID to JIET reward mapping (in JIET tokens)
-const QUIZ_REWARDS: Record<number, number> = {
-  1: 10,   // Blockchain Basics - 10 JIET
-  2: 15,   // Cryptocurrency Fundamentals - 15 JIET
-  3: 20,   // Smart Contracts - 20 JIET
-  4: 25,   // DeFi Protocols - 25 JIET
-  5: 30,   // NFT & Web3 - 30 JIET
-  6: 35,   // Crypto Security - 35 JIET
-};
+const MINIMUM_SCORE_FOR_REWARD = 70;
 
-serve(async (req) => {
-  // Handle CORS preflight requests
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, {
+      status: 200,
+      headers: corsHeaders,
+    });
   }
 
   try {
@@ -54,7 +49,6 @@ serve(async (req) => {
       throw new Error('Unauthorized');
     }
 
-    // Parse request body
     const { quizId, score, walletAddress } = await req.json();
 
     console.log('Processing reward:', { userId: user.id, quizId, score, walletAddress });
@@ -63,6 +57,17 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ error: 'Missing required fields' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (score < MINIMUM_SCORE_FOR_REWARD) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          message: `You need at least ${MINIMUM_SCORE_FOR_REWARD}% to claim JIET rewards. Your score: ${score}%`,
+          scoreRequired: MINIMUM_SCORE_FOR_REWARD
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -76,17 +81,29 @@ serve(async (req) => {
 
     if (existingCompletion?.jiet_rewarded) {
       return new Response(
-        JSON.stringify({ 
-          success: false, 
-          message: 'You have already received rewards for this quiz',
+        JSON.stringify({
+          success: false,
+          message: 'You have already claimed rewards for this quiz',
           alreadyRewarded: true
         }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Calculate JIET reward based on quiz
-    const jietAmount = QUIZ_REWARDS[quizId] || 10;
+    const { data: quizData } = await supabase
+      .from('quizzes')
+      .select('jiet_reward')
+      .eq('id', quizId)
+      .maybeSingle();
+
+    if (!quizData) {
+      return new Response(
+        JSON.stringify({ error: 'Quiz not found' }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const jietAmount = quizData.jiet_reward;
 
     console.log('Initiating JIET transfer:', { amount: jietAmount, to: walletAddress });
 
