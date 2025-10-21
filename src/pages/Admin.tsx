@@ -73,24 +73,6 @@ const Admin = () => {
     isActive: true
   });
 
-  // Check if user is admin
-  useEffect(() => {
-    const checkAdminStatus = async () => {
-      if (!user) {
-        setIsCheckingAdmin(false);
-        return;
-      }
-
-      // Check admin emails (you can also use a database table for this)
-      const adminEmails = ['admin@cryptiq.com', 'super@cryptiq.com'];
-      const isUserAdmin = adminEmails.includes(user.email || '');
-      
-      setIsAdmin(isUserAdmin);
-      setIsCheckingAdmin(false);
-    };
-
-    checkAdminStatus();
-  }, [user]);
 
   // Fetch data based on selected tab
   useEffect(() => {
