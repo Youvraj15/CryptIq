@@ -204,7 +204,7 @@ const Quiz = () => {
     }
   };
 
-  // Replace the handleClaimReward function in Quiz.tsx with this:
+// Replace the handleClaimReward function in Quiz.tsx with this:
 
 const handleClaimReward = async (quizId: number, score: number) => {
   if (!connected || !publicKey) {
@@ -251,24 +251,31 @@ const handleClaimReward = async (quizId: number, score: number) => {
     console.log('💼 Wallet:', publicKey.toString());
 
     // Call edge function with proper formatting
-    const { data, error } = await supabase.functions.invoke('transfer-jiet-reward', {
-      body: {
-        quizId: quizId,
-        score: userScore,
-        walletAddress: publicKey.toString(),
-      },
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
+    const response = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transfer-jiet-reward`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY || '',
+        },
+        body: JSON.stringify({
+          quizId: quizId,
+          score: userScore,
+          walletAddress: publicKey.toString(),
+        }),
       }
-    });
+    );
 
-    console.log('📦 Response:', data);
-
-    if (error) {
-      console.error('❌ Edge function error:', error);
-      throw error;
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ HTTP Error:', response.status, errorText);
+      throw new Error(`Server error: ${response.status} - ${errorText}`);
     }
+
+    const data = await response.json();
+    console.log('📦 Response:', data);
 
     // Check response
     if (data && data.success) {
