@@ -4,10 +4,10 @@ import { Button } from '@/components/ui/button';
 import { Award, CheckCircle, Lock, Code, Target, Bug, Key, Binary } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { LabModal } from '@/components/LabModal';
-import { labTasksData } from '@/data/labTasks';
+// import { labTasksData } from '@/data/labTasks'; // No longer needed
 import { useToast } from '@/hooks/use-toast';
 import { useLabCompletion } from '@/hooks/useLabCompletion';
-import { supabase } from '@/integrations/supabase/client'; // Import Supabase client
+import { supabase } from '@/integrations/supabase/client';
 import { Skeleton } from '@/components/ui/skeleton';
 
 // 1. Define a type for our Lab data from the database
@@ -19,9 +19,10 @@ interface Lab {
   category: string;
   is_locked: boolean;
   created_at: string;
+  // We don't select the 'flag' column to keep it secret from the frontend
 }
 
-// 2. Define categories for the UI (this stays hard-coded)
+// 2. Define categories for the UI
 const labCategories = [
   { title: 'Web Exploitation', category: 'Web', icon: <Bug className="w-7 h-7 text-primary" /> },
   { title: 'Smart Contract', category: 'Smart Contract', icon: <Binary className="w-7 h-7 text-primary" /> },
@@ -46,34 +47,27 @@ const LabCardSkeleton = () => (
 );
 
 const Labs = () => {
-  // 3. Set up state for labs, loading, and selection
   const [labs, setLabs] = useState<Lab[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedLab, setSelectedLab] = useState<number | null>(null);
-  
-  // States for completed labs (from hook)
   const [completedLabIds, setCompletedLabIds] = useState<number[]>([]);
   
   const { toast } = useToast();
   const { getCompletedLabs, completeLab } = useLabCompletion();
 
-  // 4. Fetch all labs from Supabase on component mount
+  // Fetch all labs from Supabase
   useEffect(() => {
     const fetchLabs = async () => {
       setIsLoading(true);
       try {
-        // This 'labs' table is the one we created in SQL
+        // Select all columns *except* the flag
         const { data, error } = await supabase
           .from('labs')
-          .select('*')
+          .select('id, title, description, xp_reward, category, is_locked, created_at')
           .order('id', { ascending: true });
 
-        if (error) {
-          throw error;
-        }
-        if (data) {
-          setLabs(data);
-        }
+        if (error) throw error;
+        if (data) setLabs(data);
       } catch (error: any) {
         console.error('Error fetching labs:', error.message);
         toast({
@@ -89,12 +83,11 @@ const Labs = () => {
     fetchLabs();
   }, [toast]);
 
-  // 5. Load completed labs (from the hook)
+  // Load completed labs
   useEffect(() => {
     let mounted = true;
     const loadCompleted = async () => {
       try {
-        // This function is from useLabCompletion.tsx and needs no changes
         const completed = await getCompletedLabs();
         if (mounted && Array.isArray(completed)) {
           setCompletedLabIds(completed);
@@ -107,16 +100,12 @@ const Labs = () => {
     return () => { mounted = false; };
   }, [getCompletedLabs]);
 
-  // Handle lab completion (this logic remains the same)
+  // This function is now CALLED by the modal on success
   const handleLabComplete = async (labId: number) => {
     try {
-      // This function is from useLabCompletion.tsx and needs no changes
       const result = await completeLab(labId);
       if (result && result.success && !result.alreadyCompleted) {
-        setCompletedLabIds(prev => {
-          if (prev.includes(labId)) return prev;
-          return [...prev, labId];
-        });
+        setCompletedLabIds(prev => [...prev, labId]);
         toast({
           title: 'Challenge completed!',
           description: 'XP awarded!'
@@ -137,6 +126,29 @@ const Labs = () => {
     }
   };
 
+  // NEW: This function calls our Edge Function
+  const handleFlagSubmit = async (submitted_flag: string) => {
+    if (selectedLab === null) {
+      return { success: false, message: 'No lab selected.' };
+    }
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('check-lab-flag', {
+        body: { lab_id: selectedLab, submitted_flag },
+      });
+
+      if (error) throw new Error(error.message);
+      
+      // The Edge Function returns { success: boolean, message: string }
+      return data; 
+      
+    } catch (err: any) {
+      console.error('Flag submission error:', err);
+      return { success: false, message: err.message || 'Failed to check flag.' };
+    }
+  };
+
+
   const handleStartLab = (labId: number, locked: boolean) => {
     if (locked) {
       toast({
@@ -149,7 +161,7 @@ const Labs = () => {
     setSelectedLab(labId);
   };
 
-  // Category color logic (uses the 'category' field from the DB)
+  // Category color logic
   const getCategoryColor = (category: string) => {
     switch (category) {
       case 'Web':
@@ -165,11 +177,11 @@ const Labs = () => {
     }
   };
 
-  // 6. Calculate stats (uses lab.xp_reward from the DB)
+  // Calculate stats
   const completedCount = completedLabIds.length;
   const totalXP = completedLabIds.reduce((sum, labId) => {
     const lab = labs.find(l => l.id === labId);
-    return sum + (lab?.xp_reward || 0); // Use xp_reward
+    return sum + (lab?.xp_reward || 0);
   }, 0);
 
   const selectedLabData = labs.find(l => l.id === selectedLab);
@@ -186,7 +198,8 @@ const Labs = () => {
 
       {/* Stats Overview */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="border-2">
+        {/* ... Stats cards are unchanged ... */}
+         <Card className="border-2">
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -236,10 +249,7 @@ const Labs = () => {
       {/* Labs Categories */}
       <div className="space-y-10">
         {labCategories.map((category) => {
-          // 7. Filter labs from state (uses lab.category from the DB)
           const categoryLabs = labs.filter(lab => lab.category === category.category);
-          
-          // Don't render empty categories
           if (!isLoading && categoryLabs.length === 0) return null;
 
           return (
@@ -249,7 +259,7 @@ const Labs = () => {
                 {category.title}
               </h2>
 
-              {/* 8. Show skeletons while loading, else show labs */}
+              {/* Labs Grid */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {isLoading ? (
                   <>
@@ -318,9 +328,9 @@ const Labs = () => {
                                 Locked
                               </>
                             ) : isCompleted ? (
-                              'Review Challenge'
+                              'Review' // Changed from 'Review Challenge'
                             ) : (
-                              'Start Challenge'
+                              'Start' // Changed from 'Start Challenge'
                             )}
                           </Button>
                         </CardContent>
@@ -334,16 +344,18 @@ const Labs = () => {
         })}
       </div>
 
-      {/* Lab Modal (uses xp_reward from the DB) */}
+      {/* MODIFIED Lab Modal */}
       {selectedLabData && selectedLab !== null && (
         <LabModal
           open={selectedLab !== null}
           onOpenChange={(open) => !open && setSelectedLab(null)}
           labTitle={selectedLabData.title}
           labDescription={selectedLabData.description}
-          tasks={labTasksData[selectedLab as any] || []}
-          xpReward={selectedLabData.xp_reward} 
-          onComplete={() => handleLabComplete(selectedLab!)}
+          xpReward={selectedLabData.xp_reward}
+          // NEW: Pass the flag submit handler
+          onFlagSubmit={handleFlagSubmit}
+          // NEW: Pass the completion handler
+          onCompletion={() => handleLabComplete(selectedLab!)}
         />
       )}
     </div>
