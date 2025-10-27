@@ -536,7 +536,7 @@ const handleClaimReward = async (quizId: number, score: number) => {
                         <p className="text-xs text-accent font-medium">
                           <CheckCircle className="w-3 h-3 inline mr-1" />
                           JIET Reward Claimed
-                        </Fp>
+                        </p>
                       </div>
                     )}
                   </div>
