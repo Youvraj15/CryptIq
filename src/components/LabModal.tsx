@@ -10,23 +10,85 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, Flag } from 'lucide-react';
+import { Loader2, Flag, Link, FileText, Code } from 'lucide-react';
+
+// Define the shape of the challenge data
+interface ChallengeData {
+  text?: string;
+  link?: string;
+  code?: string;
+  challenge_file?: string;
+}
 
 interface LabModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   labTitle: string;
   labDescription: string;
+  challengeData: ChallengeData | null; // <-- NEW: Pass the challenge data
   xpReward: number;
   onFlagSubmit: (flag: string) => Promise<{ success: boolean; message: string }>;
-  onCompletion: () => void; // We'll call this after a successful submission
+  onCompletion: () => void;
 }
+
+// Helper component to render the challenge data
+const ChallengeContent = ({ data }: { data: ChallengeData }) => {
+  return (
+    <div className="space-y-4">
+      {data.text && (
+        <div className="flex items-start gap-3">
+          <FileText className="w-5 h-5 text-muted-foreground flex-shrink-0 mt-1" />
+          <p className="text-sm text-muted-foreground">{data.text}</p>
+        </div>
+      )}
+      {data.link && (
+        <div className="flex items-center gap-3">
+          <Link className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+          <a
+            href={data.link}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm text-primary hover:underline"
+          >
+            {data.link}
+          </a>
+        </div>
+      )}
+      {data.challenge_file && (
+        <div className="flex items-center gap-3">
+          <Link className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+          <a
+            href={data.challenge_file}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm text-primary hover:underline"
+          >
+            Download Challenge File
+          </a>
+        </div>
+      )}
+      {data.code && (
+        <div className="space-y-2">
+          <div className="flex items-center gap-3">
+            <Code className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+            <p className="text-sm text-muted-foreground">Contract Code:</p>
+          </div>
+          <pre className="bg-muted text-muted-foreground p-4 rounded-md text-xs overflow-x-auto">
+            <code>{data.code}</code>
+          </pre>
+        </div>
+      )}
+    </div>
+  );
+};
+
 
 export const LabModal = ({
   open,
   onOpenChange,
   labTitle,
   labDescription,
+  challengeData,
   xpReward,
   onFlagSubmit,
   onCompletion,
@@ -44,13 +106,10 @@ export const LabModal = ({
 
     try {
       const result = await onFlagSubmit(flag);
-
       if (result.success) {
-        // Flag is correct!
-        onCompletion(); // Call the original onComplete function
-        onOpenChange(false); // Close the modal
+        onCompletion();
+        onOpenChange(false);
       } else {
-        // Flag is incorrect
         setError(result.message || 'Incorrect flag.');
       }
     } catch (err: any) {
@@ -60,7 +119,6 @@ export const LabModal = ({
     }
   };
 
-  // Reset state when modal is closed
   const handleOpenChange = (isOpen: boolean) => {
     if (!isOpen) {
       setFlag('');
@@ -72,7 +130,7 @@ export const LabModal = ({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle className="text-2xl">{labTitle}</DialogTitle>
           <DialogDescription className="pt-2">
@@ -80,42 +138,52 @@ export const LabModal = ({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="py-4">
-          <p className="text-lg font-semibold text-primary mb-4">
-            Reward: {xpReward} XP
-          </p>
-          
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <label htmlFor="flag" className="text-sm font-medium">
-                Submit Flag
-              </label>
-              <Input
-                id="flag"
-                placeholder="flag{...}"
-                value={flag}
-                onChange={(e) => setFlag(e.target.value)}
-                disabled={isLoading}
-              />
+        <div className="py-4 space-y-6">
+          {/* NEW: Render Challenge Data */}
+          {challengeData && (
+            <div>
+              <h4 className="font-semibold mb-3">Challenge Info</h4>
+              <ChallengeContent data={challengeData} />
             </div>
+          )}
 
-            {error && (
-              <Alert variant="destructive">
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
+          <div className="border-t pt-6 space-y-4">
+            <p className="text-lg font-semibold text-primary">
+              Reward: {xpReward} XP
+            </p>
+            
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <label htmlFor="flag" className="text-sm font-medium">
+                  Submit Flag
+                </label>
+                <Input
+                  id="flag"
+                  placeholder="flag{...}"
+                  value={flag}
+                  onChange={(e) => setFlag(e.target.value)}
+                  disabled={isLoading}
+                />
+              </div>
 
-            <DialogFooter>
-              <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Flag className="mr-2 h-4 w-4" />
-                )}
-                Submit
-              </Button>
-            </DialogFooter>
-          </form>
+              {error && (
+                <Alert variant="destructive">
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+
+              <DialogFooter>
+                <Button type="submit" className="w-full" disabled={isLoading}>
+                  {isLoading ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Flag className="mr-2 h-4 w-4" />
+                  )}
+                  Submit
+                </Button>
+              </DialogFooter>
+            </form>
+          </div>
         </div>
       </DialogContent>
     </Dialog>

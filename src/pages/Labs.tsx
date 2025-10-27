@@ -4,31 +4,41 @@ import { Button } from '@/components/ui/button';
 import { Award, CheckCircle, Lock, Code, Target, Bug, Key, Binary } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { LabModal } from '@/components/LabModal';
-// import { labTasksData } from '@/data/labTasks'; // No longer needed
 import { useToast } from '@/hooks/use-toast';
 import { useLabCompletion } from '@/hooks/useLabCompletion';
 import { supabase } from '@/integrations/supabase/client';
 import { Skeleton } from '@/components/ui/skeleton';
 
-// 1. Define a type for our Lab data from the database
-interface Lab {
+// 1. Define types for our NEW data structures
+interface LabCategory {
   id: number;
   title: string;
   description: string;
-  xp_reward: number;
-  category: string;
-  is_locked: boolean;
-  created_at: string;
-  // We don't select the 'flag' column to keep it secret from the frontend
+  icon: string;
 }
 
-// 2. Define categories for the UI
-const labCategories = [
-  { title: 'Web Exploitation', category: 'Web', icon: <Bug className="w-7 h-7 text-primary" /> },
-  { title: 'Smart Contract', category: 'Smart Contract', icon: <Binary className="w-7 h-7 text-primary" /> },
-  { title: 'Cryptography', category: 'Crypto', icon: <Key className="w-7 h-7 text-primary" /> },
-  { title: 'Miscellaneous', category: 'Misc', icon: <Code className="w-7 h-7 text-primary" /> },
-];
+interface LabTask {
+  id: number;
+  lab_id: number; // The category ID
+  title: string;
+  description: string;
+  challenge_data: any; // The JSONB data
+  xp_reward: number;
+  is_locked: boolean;
+  // Flag is NOT selected
+}
+
+// 2. Map icons
+const categoryIcons: { [key: string]: React.ReactNode } = {
+  Bug: <Bug className="w-7 h-7 text-primary" />,
+  Binary: <Binary className="w-7 h-7 text-primary" />,
+  Key: <Key className="w-7 h-7 text-primary" />,
+  Default: <Code className="w-7 h-7 text-primary" />,
+};
+
+const getCategoryIcon = (iconName: string) => {
+  return categoryIcons[iconName] || categoryIcons.Default;
+};
 
 // A simple skeleton loader component for the cards
 const LabCardSkeleton = () => (
@@ -47,29 +57,41 @@ const LabCardSkeleton = () => (
 );
 
 const Labs = () => {
-  const [labs, setLabs] = useState<Lab[]>([]);
+  const [labCategories, setLabCategories] = useState<LabCategory[]>([]);
+  const [labTasks, setLabTasks] = useState<LabTask[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [selectedLab, setSelectedLab] = useState<number | null>(null);
-  const [completedLabIds, setCompletedLabIds] = useState<number[]>([]);
+  const [selectedTask, setSelectedTask] = useState<number | null>(null);
+  const [completedTaskIds, setCompletedTaskIds] = useState<number[]>([]);
   
   const { toast } = useToast();
-  const { getCompletedLabs, completeLab } = useLabCompletion();
+  // 3. Use the updated hook functions
+  const { getCompletedTasks, completeTask } = useLabCompletion();
 
-  // Fetch all labs from Supabase
+  // 4. Fetch all data on load
   useEffect(() => {
-    const fetchLabs = async () => {
+    const fetchAllData = async () => {
       setIsLoading(true);
       try {
-        // Select all columns *except* the flag
-        const { data, error } = await supabase
+        // Fetch categories
+        const { data: categories, error: catError } = await supabase
           .from('labs')
-          .select('id, title, description, xp_reward, category, is_locked, created_at')
-          .order('id', { ascending: true });
+          .select('*');
+        if (catError) throw catError;
+        if (categories) setLabCategories(categories);
 
-        if (error) throw error;
-        if (data) setLabs(data);
+        // Fetch all tasks
+        const { data: tasks, error: taskError } = await supabase
+          .from('lab_tasks')
+          .select('id, lab_id, title, description, challenge_data, xp_reward, is_locked');
+        if (taskError) throw taskError;
+        if (tasks) setLabTasks(tasks);
+
+        // Fetch completed tasks
+        const completed = await getCompletedTasks();
+        setCompletedTaskIds(completed);
+
       } catch (error: any) {
-        console.error('Error fetching labs:', error.message);
+        console.error('Error fetching lab data:', error.message);
         toast({
           title: "Error",
           description: "Could not fetch lab challenges.",
@@ -80,32 +102,15 @@ const Labs = () => {
       }
     };
     
-    fetchLabs();
-  }, [toast]);
-
-  // Load completed labs
-  useEffect(() => {
-    let mounted = true;
-    const loadCompleted = async () => {
-      try {
-        const completed = await getCompletedLabs();
-        if (mounted && Array.isArray(completed)) {
-          setCompletedLabIds(completed);
-        }
-      } catch (err) {
-        console.error('Failed to load completed labs', err);
-      }
-    };
-    loadCompleted();
-    return () => { mounted = false; };
-  }, [getCompletedLabs]);
+    fetchAllData();
+  }, [getCompletedTasks, toast]);
 
   // This function is now CALLED by the modal on success
-  const handleLabComplete = async (labId: number) => {
+  const handleTaskComplete = async (task_id: number) => {
     try {
-      const result = await completeLab(labId);
+      const result = await completeTask(task_id); // Use new hook function
       if (result && result.success && !result.alreadyCompleted) {
-        setCompletedLabIds(prev => [...prev, labId]);
+        setCompletedTaskIds(prev => [...prev, task_id]);
         toast({
           title: 'Challenge completed!',
           description: 'XP awarded!'
@@ -117,7 +122,7 @@ const Labs = () => {
         });
       }
     } catch (err) {
-      console.error('Error completing lab', err);
+      console.error('Error completing task', err);
       toast({
         title: 'Error',
         description: 'Failed to mark challenge as completed.',
@@ -126,20 +131,18 @@ const Labs = () => {
     }
   };
 
-  // NEW: This function calls our Edge Function
+  // This function calls our Edge Function
   const handleFlagSubmit = async (submitted_flag: string) => {
-    if (selectedLab === null) {
-      return { success: false, message: 'No lab selected.' };
+    if (selectedTask === null) {
+      return { success: false, message: 'No task selected.' };
     }
     
     try {
       const { data, error } = await supabase.functions.invoke('check-lab-flag', {
-        body: { lab_id: selectedLab, submitted_flag },
+        body: { task_id: selectedTask, submitted_flag }, // Pass task_id
       });
 
       if (error) throw new Error(error.message);
-      
-      // The Edge Function returns { success: boolean, message: string }
       return data; 
       
     } catch (err: any) {
@@ -148,8 +151,7 @@ const Labs = () => {
     }
   };
 
-
-  const handleStartLab = (labId: number, locked: boolean) => {
+  const handleStartTask = (task_id: number, locked: boolean) => {
     if (locked) {
       toast({
         title: "Challenge Locked",
@@ -158,33 +160,17 @@ const Labs = () => {
       });
       return;
     }
-    setSelectedLab(labId);
-  };
-
-  // Category color logic
-  const getCategoryColor = (category: string) => {
-    switch (category) {
-      case 'Web':
-        return 'bg-blue-500/20 text-blue-400';
-      case 'Smart Contract':
-        return 'bg-yellow-500/20 text-yellow-400';
-      case 'Crypto':
-        return 'bg-green-500/20 text-green-400';
-      case 'Misc':
-        return 'bg-purple-500/20 text-purple-400';
-      default:
-        return 'bg-muted text-muted-foreground';
-    }
+    setSelectedTask(task_id);
   };
 
   // Calculate stats
-  const completedCount = completedLabIds.length;
-  const totalXP = completedLabIds.reduce((sum, labId) => {
-    const lab = labs.find(l => l.id === labId);
-    return sum + (lab?.xp_reward || 0);
+  const completedCount = completedTaskIds.length;
+  const totalXP = completedTaskIds.reduce((sum, task_id) => {
+    const task = labTasks.find(t => t.id === task_id);
+    return sum + (task?.xp_reward || 0);
   }, 0);
 
-  const selectedLabData = labs.find(l => l.id === selectedLab);
+  const selectedTaskData = labTasks.find(t => t.id === selectedTask);
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto">
@@ -198,8 +184,7 @@ const Labs = () => {
 
       {/* Stats Overview */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* ... Stats cards are unchanged ... */}
-         <Card className="border-2">
+        <Card className="border-2">
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -208,13 +193,12 @@ const Labs = () => {
               <div>
                 <p className="text-sm text-muted-foreground">Challenges Solved</p>
                 <p className="text-2xl font-bold text-foreground">
-                  {completedCount}/{labs.length}
+                  {completedCount}/{labTasks.length}
                 </p>
               </div>
             </div>
           </CardContent>
         </Card>
-        
         <Card className="border-2">
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
@@ -228,7 +212,6 @@ const Labs = () => {
             </div>
           </CardContent>
         </Card>
-        
         <Card className="border-2">
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
@@ -238,7 +221,7 @@ const Labs = () => {
               <div>
                 <p className="text-sm text-muted-foreground">Completion</p>
                 <p className="text-2xl font-bold text-foreground">
-                  {labs.length > 0 ? Math.round((completedCount / labs.length) * 100) : 0}%
+                  {labTasks.length > 0 ? Math.round((completedCount / labTasks.length) * 100) : 0}%
                 </p>
               </div>
             </div>
@@ -246,64 +229,69 @@ const Labs = () => {
         </Card>
       </div>
 
-      {/* Labs Categories */}
+      {/* 5. Render: Loop categories, THEN loop tasks */}
       <div className="space-y-10">
-        {labCategories.map((category) => {
-          const categoryLabs = labs.filter(lab => lab.category === category.category);
-          if (!isLoading && categoryLabs.length === 0) return null;
-
-          return (
-            <section key={category.category} className="space-y-4">
-              {/* Category Header */}
-              <h2 className="text-2xl font-bold text-foreground border-b-2 pb-2">
-                {category.title}
-              </h2>
-
-              {/* Labs Grid */}
+        {isLoading ? (
+          // Show skeleton categories
+          [1, 2].map(i => (
+            <section key={i} className="space-y-4">
+              <Skeleton className="w-1/3 h-8" />
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {isLoading ? (
-                  <>
-                    <LabCardSkeleton />
-                    <LabCardSkeleton />
-                  </>
-                ) : (
-                  categoryLabs.map((lab) => {
-                    const isCompleted = completedLabIds.includes(lab.id);
+                <LabCardSkeleton />
+                <LabCardSkeleton />
+              </div>
+            </section>
+          ))
+        ) : (
+          // Render actual categories and tasks
+          labCategories.map((category) => {
+            const tasksInCategory = labTasks.filter(task => task.lab_id === category.id);
+            if (tasksInCategory.length === 0) return null;
+
+            return (
+              <section key={category.id} className="space-y-4">
+                <h2 className="text-2xl font-bold text-foreground border-b-2 pb-2">
+                  {category.title}
+                </h2>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {tasksInCategory.map((task) => {
+                    const isCompleted = completedTaskIds.includes(task.id);
                     
                     return (
                       <Card 
-                        key={lab.id} 
+                        key={task.id} 
                         className="border-2 hover:border-primary/50 transition-all group"
                       >
                         <CardContent className="p-6">
                           <div className="flex justify-between items-start mb-4">
                             <div className="flex items-center gap-3">
                               <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-primary/10 to-accent/10 flex items-center justify-center group-hover:scale-110 transition-transform">
-                                {category.icon || <Code className="w-7 h-7 text-primary" />}
+                                {getCategoryIcon(category.icon)}
                               </div>
                               {isCompleted && (
                                 <CheckCircle className="w-6 h-6 text-green-500" />
                               )}
-                              {lab.is_locked && (
+                              {task.is_locked && (
                                 <Lock className="w-6 h-6 text-muted-foreground" />
                               )}
                             </div>
-                            <Badge className={getCategoryColor(lab.category)}>
-                              {lab.category}
+                            <Badge className="bg-muted text-muted-foreground">
+                              {category.title}
                             </Badge>
                           </div>
 
                           <h3 className="text-xl font-bold text-foreground mb-2">
-                            {lab.title}
+                            {task.title}
                           </h3>
                           <p className="text-muted-foreground text-sm mb-4">
-                            {lab.description}
+                            {task.description}
                           </p>
 
                           <div className="flex items-center gap-4 text-sm text-muted-foreground mb-4">
                             <div className="flex items-center gap-1.5">
                               <Award className="w-4 h-4 text-primary" />
-                              <span className="text-primary font-medium">{lab.xp_reward} XP</span>
+                              <span className="text-primary font-medium">{task.xp_reward} XP</span>
                             </div>
                           </div>
 
@@ -317,45 +305,41 @@ const Labs = () => {
                           )}
 
                           <Button 
-                            onClick={() => handleStartLab(lab.id, lab.is_locked)}
-                            disabled={lab.is_locked}
+                            onClick={() => handleStartTask(task.id, task.is_locked)}
+                            disabled={task.is_locked}
                             className="w-full"
                             size="lg"
                           >
-                            {lab.is_locked ? (
-                              <>
-                                <Lock className="w-4 h-4 mr-2" />
-                                Locked
-                              </>
+                            {task.is_locked ? (
+                              <><Lock className="w-4 h-4 mr-2" /> Locked</>
                             ) : isCompleted ? (
-                              'Review' // Changed from 'Review Challenge'
+                              'Review'
                             ) : (
-                              'Start' // Changed from 'Start Challenge'
+                              'Start'
                             )}
                           </Button>
                         </CardContent>
                       </Card>
                     );
-                  })
-                )}
-              </div>
-            </section>
-          );
-        })}
+                  })}
+                </div>
+              </section>
+            );
+          })
+        )}
       </div>
 
-      {/* MODIFIED Lab Modal */}
-      {selectedLabData && selectedLab !== null && (
+      {/* Lab Modal */}
+      {selectedTaskData && selectedTask !== null && (
         <LabModal
-          open={selectedLab !== null}
-          onOpenChange={(open) => !open && setSelectedLab(null)}
-          labTitle={selectedLabData.title}
-          labDescription={selectedLabData.description}
-          xpReward={selectedLabData.xp_reward}
-          // NEW: Pass the flag submit handler
+          open={selectedTask !== null}
+          onOpenChange={(open) => !open && setSelectedTask(null)}
+          labTitle={selectedTaskData.title}
+          labDescription={selectedTaskData.description}
+          challengeData={selectedTaskData.challenge_data} 
+          xpReward={selectedTaskData.xp_reward}
           onFlagSubmit={handleFlagSubmit}
-          // NEW: Pass the completion handler
-          onCompletion={() => handleLabComplete(selectedLab!)}
+          onCompletion={() => handleTaskComplete(selectedTask!)}
         />
       )}
     </div>
