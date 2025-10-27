@@ -204,99 +204,121 @@ const Quiz = () => {
     }
   };
 
-  const handleClaimReward = async (quizId: number, score: number) => {
-    if (!connected || !publicKey) {
+  // Replace the handleClaimReward function in Quiz.tsx with this:
+
+const handleClaimReward = async (quizId: number, score: number) => {
+  if (!connected || !publicKey) {
+    toast({
+      title: "Wallet Not Connected",
+      description: "Please connect your Solana wallet to claim rewards.",
+      variant: "destructive"
+    });
+    return;
+  }
+
+  // Double check score
+  const userScore = quizScores[quizId] ?? score;
+  if (userScore < 70) {
+    toast({
+      title: "Score Too Low",
+      description: "You must score 70% or higher to claim rewards.",
+      variant: "destructive"
+    });
+    return;
+  }
+
+  if (rewardedQuizzes.has(quizId)) {
+    toast({
+      title: "Already Claimed",
+      description: "You have already claimed rewards for this quiz.",
+    });
+    return;
+  }
+
+  setIsClaimingReward(true);
+
+  try {
+    // Get session token
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError || !sessionData.session) {
+      throw new Error('You must be logged in to claim rewards.');
+    }
+
+    const token = sessionData.session.access_token;
+
+    console.log('🎯 Claiming reward for quiz:', quizId);
+    console.log('📊 Score:', userScore);
+    console.log('💼 Wallet:', publicKey.toString());
+
+    // Call edge function with proper formatting
+    const { data, error } = await supabase.functions.invoke('transfer-jiet-reward', {
+      body: {
+        quizId: quizId,
+        score: userScore,
+        walletAddress: publicKey.toString(),
+      },
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      }
+    });
+
+    console.log('📦 Response:', data);
+
+    if (error) {
+      console.error('❌ Edge function error:', error);
+      throw error;
+    }
+
+    // Check response
+    if (data && data.success) {
+      // Mark as rewarded locally
+      setRewardedQuizzes(prev => new Set([...Array.from(prev), quizId]));
+
+      // Update database record
+      if (user) {
+        try {
+          await supabase
+            .from('quiz_completions')
+            .upsert({
+              user_id: user.id,
+              quiz_id: quizId,
+              score: userScore,
+              jiet_rewarded: true,
+              jiet_amount: data.amount || 10,
+              wallet_address: publicKey.toString(),
+              transaction_signature: data.signature
+            }, { onConflict: ['user_id', 'quiz_id'] });
+        } catch (err) {
+          console.error('Failed to update local DB record', err);
+        }
+      }
+
       toast({
-        title: "Wallet Not Connected",
-        description: "Please connect your Solana wallet to claim rewards.",
-        variant: "destructive"
+        title: "Reward Claimed! 🎉",
+        description: data.message || 'JIET tokens sent to your wallet!',
       });
-      return;
-    }
-
-    // Double check score just in case
-    const userScore = quizScores[quizId] ?? score;
-    if (userScore < 70) {
-       toast({
-        title: "Score Too Low",
-        description: "You must score 70% or higher to claim rewards.",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    if (rewardedQuizzes.has(quizId)) {
+    } else if (data && data.alreadyRewarded) {
+      // Already rewarded - update local state
+      setRewardedQuizzes(prev => new Set([...Array.from(prev), quizId]));
       toast({
         title: "Already Claimed",
-        description: "You have already claimed rewards for this quiz.",
+        description: data.message || 'This reward was already claimed.',
       });
-      return;
+    } else {
+      throw new Error(data?.error || 'Unknown error occurred');
     }
-
-    setIsClaimingReward(true);
-
-    try {
-      // Supabase function expects string body
-      const { data, error } = await supabase.functions.invoke('transfer-jiet-reward', {
-        body: JSON.stringify({
-          quizId,
-          score: userScore,
-          walletAddress: publicKey.toString(),
-        })
-      });
-
-      if (error) throw error;
-
-      // expected returned shape: { success: boolean, message?: string, alreadyRewarded?: boolean }
-      if (data && (data as any).success) {
-        setRewardedQuizzes(prev => new Set([...Array.from(prev), quizId]));
-
-        // persist jiet_rewarded in quiz_completions table
-        if (user) {
-          try {
-            await supabase
-              .from('quiz_completions')
-              .upsert({
-                user_id: user.id,
-                quiz_id: quizId,
-                score: userScore,
-                jiet_rewarded: true
-              }, { onConflict: ['user_id', 'quiz_id'] });
-          } catch (err) {
-            console.error('Failed to mark jiet_rewarded in DB', err);
-          }
-        }
-
-        toast({
-          title: "Reward Claimed! 🎉",
-          description: (data as any).message || 'JIET tokens were sent to your wallet.',
-        });
-      } else if (data && (data as any).alreadyRewarded) {
-        // Mark locally to avoid repeated calls
-        setRewardedQuizzes(prev => new Set([...Array.from(prev), quizId]));
-        toast({
-          title: "Already Claimed",
-          description: (data as any).message || 'This quiz reward was already claimed.',
-        });
-      } else {
-        console.error('Unexpected response from function', data);
-        toast({
-          title: "Error",
-          description: "Failed to claim reward. Please try again.",
-          variant: "destructive"
-        });
-      }
-    } catch (err) {
-      console.error('Error claiming reward:', err);
-      toast({
-        title: "Error",
-        description: "Failed to claim reward. Please try again.",
-        variant: "destructive"
-      });
-    } finally {
-      setIsClaimingReward(false);
-    }
-  };
+  } catch (err: any) {
+    console.error('❌ Claim error:', err);
+    toast({
+      title: "Claim Failed",
+      description: err.message || "Failed to claim reward. Please try again.",
+      variant: "destructive"
+    });
+  } finally {
+    setIsClaimingReward(false);
+  }
+};
 
   // Fetches questions from DB and opens modal
   const handleStartQuiz = async (quizId: number, locked: boolean) => {
