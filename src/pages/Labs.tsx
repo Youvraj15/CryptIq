@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Award, CheckCircle, Lock, Code, Target, Bug, Key, Binary } from 'lucide-react';
+import { Award, CheckCircle, Lock, Code, Target, Key } from 'lucide-react'; // Removed Bug, Binary
 import { Badge } from '@/components/ui/badge';
 import { LabModal } from '@/components/LabModal';
 import { useToast } from '@/hooks/use-toast';
@@ -28,10 +28,8 @@ interface LabTask {
   // Flag is NOT selected
 }
 
-// 2. Map icons
+// 2. Map icons (UPDATED: Removed unused icons)
 const categoryIcons: { [key: string]: React.ReactNode } = {
-  Bug: <Bug className="w-7 h-7 text-primary" />,
-  Binary: <Binary className="w-7 h-7 text-primary" />,
   Key: <Key className="w-7 h-7 text-primary" />,
   Default: <Code className="w-7 h-7 text-primary" />,
 };
@@ -126,7 +124,7 @@ const Labs = () => {
       toast({
         title: 'Error',
         description: 'Failed to mark challenge as completed.',
-        variant: 'destructive'
+        variant: "destructive"
       });
     }
   };
@@ -176,9 +174,9 @@ const Labs = () => {
     <div className="space-y-8 max-w-7xl mx-auto">
       {/* Header */}
       <div className="space-y-2">
-        <h1 className="text-4xl font-bold text-foreground">Challenges 🏴‍☠️</h1>
+        <h1 className="text-4xl font-bold text-foreground">Crypto Challenges 🔑</h1>
         <p className="text-muted-foreground text-lg">
-          Test your blockchain security skills.
+          Test your cryptography and code-breaking skills.
         </p>
       </div>
 
@@ -233,7 +231,7 @@ const Labs = () => {
       <div className="space-y-10">
         {isLoading ? (
           // Show skeleton categories
-          [1, 2].map(i => (
+          [1].map(i => (
             <section key={i} className="space-y-4">
               <Skeleton className="w-1/3 h-8" />
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -276,8 +274,8 @@ const Labs = () => {
                                 <Lock className="w-6 h-6 text-muted-foreground" />
                               )}
                             </div>
-                            <Badge className="bg-muted text-muted-foreground">
-                              {category.title}
+                            <Badge className="bg-green-500/20 text-green-400">
+                              Cryptography
                             </Badge>
                           </div>
 
