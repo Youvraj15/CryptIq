@@ -1,3 +1,5 @@
+// src/pages/Quiz.tsx
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -204,8 +206,8 @@ const Quiz = () => {
     }
   };
 
-// Replace the handleClaimReward function in Quiz.tsx with this:
 
+// --- REWRITTEN `handleClaimReward` ---
 const handleClaimReward = async (quizId: number, score: number) => {
   if (!connected || !publicKey) {
     toast({
@@ -243,78 +245,51 @@ const handleClaimReward = async (quizId: number, score: number) => {
     if (sessionError || !sessionData.session) {
       throw new Error('You must be logged in to claim rewards.');
     }
-
     const token = sessionData.session.access_token;
 
-    console.log('🎯 Claiming reward for quiz:', quizId);
-    console.log('📊 Score:', userScore);
-    console.log('💼 Wallet:', publicKey.toString());
-
-    // Call edge function with proper formatting
-    const response = await fetch(
-      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transfer-jiet-reward`,
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY || '',
-        },
-        body: JSON.stringify({
-          quizId: quizId,
-          score: userScore,
-          walletAddress: publicKey.toString(),
-        }),
+    // Call the edge function using supabase.functions.invoke
+    // This is cleaner than fetch() as it handles headers automatically
+    const { data, error } = await supabase.functions.invoke('transfer-jiet-reward', {
+      body: JSON.stringify({
+        quizId: quizId,
+        score: userScore,
+        walletAddress: publicKey.toString(),
+      }),
+      headers: {
+        'Authorization': `Bearer ${token}`,
       }
-    );
+    });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('❌ HTTP Error:', response.status, errorText);
-      throw new Error(`Server error: ${response.status} - ${errorText}`);
+    if (error) {
+      // This will catch network errors like "failed to send request"
+      throw error;
     }
 
-    const data = await response.json();
-    console.log('📦 Response:', data);
-
-    // Check response
-    if (data && data.success) {
-      // Mark as rewarded locally
-      setRewardedQuizzes(prev => new Set([...Array.from(prev), quizId]));
-
-      // Update database record
-      if (user) {
-        try {
-          await supabase
-            .from('quiz_completions')
-            .upsert({
-              user_id: user.id,
-              quiz_id: quizId,
-              score: userScore,
-              jiet_rewarded: true,
-              jiet_amount: data.amount || 10,
-              wallet_address: publicKey.toString(),
-              transaction_signature: data.signature
-            }, { onConflict: ['user_id', 'quiz_id'] });
-        } catch (err) {
-          console.error('Failed to update local DB record', err);
-        }
+    // Handle application-level errors returned from the function
+    if (data.success === false) {
+      if (data.alreadyRewarded) {
+        // Mark as rewarded locally if the server says it's already done
+        setRewardedQuizzes(prev => new Set([...Array.from(prev), quizId]));
+        toast({
+          title: "Already Claimed",
+          description: data.error || 'This reward was already claimed.',
+        });
+      } else {
+        throw new Error(data.error || 'Unknown error occurred during claim');
       }
-
+    } else if (data.success === true) {
+      // SUCCESS!
+      // Mark as rewarded locally to update the UI
+      setRewardedQuizzes(prev => new Set([...Array.from(prev), quizId]));
       toast({
         title: "Reward Claimed! 🎉",
-        description: data.message || 'JIET tokens sent to your wallet!',
-      });
-    } else if (data && data.alreadyRewarded) {
-      // Already rewarded - update local state
-      setRewardedQuizzes(prev => new Set([...Array.from(prev), quizId]));
-      toast({
-        title: "Already Claimed",
-        description: data.message || 'This reward was already claimed.',
+        description: `+${data.amount} JIET tokens sent to your wallet!`,
       });
     } else {
-      throw new Error(data?.error || 'Unknown error occurred');
+      // Fallback for unexpected response
+      throw new Error('Received an unexpected response from the server.');
     }
+
   } catch (err: any) {
     console.error('❌ Claim error:', err);
     toast({
@@ -326,6 +301,8 @@ const handleClaimReward = async (quizId: number, score: number) => {
     setIsClaimingReward(false);
   }
 };
+// --- END of REWRITTEN `handleClaimReward` ---
+
 
   // Fetches questions from DB and opens modal
   const handleStartQuiz = async (quizId: number, locked: boolean) => {
@@ -559,7 +536,7 @@ const handleClaimReward = async (quizId: number, score: number) => {
                         <p className="text-xs text-accent font-medium">
                           <CheckCircle className="w-3 h-3 inline mr-1" />
                           JIET Reward Claimed
-                        </p>
+                        </Fp>
                       </div>
                     )}
                   </div>
