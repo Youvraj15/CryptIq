@@ -1,4 +1,4 @@
-// src/hooks/useAdmin.tsx
+// src/hooks/useAdmin.tsx - IMPROVED VERSION
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -20,9 +20,12 @@ export const useAdmin = (): AdminStatus => {
   useEffect(() => {
     const checkAdminStatus = async () => {
       if (!user) {
+        console.log('useAdmin: No user found');
         setAdminStatus({ isAdmin: false, isSuperAdmin: false, loading: false });
         return;
       }
+
+      console.log('useAdmin: Checking admin status for user:', user.id);
 
       try {
         // Method 1: Check using database function (preferred)
@@ -32,36 +35,68 @@ export const useAdmin = (): AdminStatus => {
         const { data: isSuperAdminData, error: isSuperAdminError } = await supabase
           .rpc('is_super_admin', { check_user_id: user.id });
 
+        console.log('useAdmin: RPC results', {
+          isAdminData,
+          isAdminError,
+          isSuperAdminData,
+          isSuperAdminError
+        });
+
         if (!isAdminError && !isSuperAdminError) {
-          setAdminStatus({
+          const status = {
             isAdmin: isAdminData || false,
             isSuperAdmin: isSuperAdminData || false,
+            loading: false,
+          };
+          console.log('useAdmin: Setting status from RPC:', status);
+          setAdminStatus(status);
+          return;
+        }
+
+        console.log('useAdmin: RPC functions not available or failed, trying direct query');
+
+        // Method 2: Direct query fallback
+        const { data: adminRoleData, error: roleError } = await supabase
+          .from('admin_roles')
+          .select('role')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        if (roleError) {
+          console.error('useAdmin: Error querying admin_roles:', roleError);
+          
+          // Method 3: Final fallback - check email against hardcoded list
+          const adminEmails = [
+            'mr.himanshu045@gmail.com', 
+            'super@cryptiq.com',
+            '139303804+Youvraj15@users.noreply.github.com',
+            'himanshu.bhalan@gmail.com',
+            'youvraj15@gmail.com',
+            'himanshubhalan15@gmail.com',
+            'bhalan.himanshu@gmail.com'
+          ];
+          
+          const isAdminByEmail = adminEmails.includes(user.email || '');
+          console.log('useAdmin: Fallback email check:', { email: user.email, isAdmin: isAdminByEmail });
+          
+          setAdminStatus({
+            isAdmin: isAdminByEmail,
+            isSuperAdmin: isAdminByEmail,
             loading: false,
           });
           return;
         }
 
-        // Method 2: Fallback - check email against hardcoded list
-        // Admin emails for CryptIQ platform
-        const adminEmails = [
-          'admin@cryptiq.com', 
-          'super@cryptiq.com',
-          // GitHub user emails (common patterns for Himanshu Bhalan / Youvraj15)
-          '139303804+Youvraj15@users.noreply.github.com', // GitHub noreply email
-          'himanshu.bhalan@gmail.com',
-          'youvraj15@gmail.com',
-          'himanshubhalan15@gmail.com',
-          'bhalan.himanshu@gmail.com'
-        ];
-        const isAdminByEmail = adminEmails.includes(user.email || '');
-        
-        setAdminStatus({
-          isAdmin: isAdminByEmail,
-          isSuperAdmin: isAdminByEmail,
+        const status = {
+          isAdmin: !!adminRoleData,
+          isSuperAdmin: adminRoleData?.role === 'super_admin',
           loading: false,
-        });
+        };
+        console.log('useAdmin: Setting status from direct query:', status);
+        setAdminStatus(status);
+
       } catch (error) {
-        console.error('Error checking admin status:', error);
+        console.error('useAdmin: Unexpected error:', error);
         setAdminStatus({ isAdmin: false, isSuperAdmin: false, loading: false });
       }
     };
@@ -69,6 +104,7 @@ export const useAdmin = (): AdminStatus => {
     checkAdminStatus();
   }, [user]);
 
+  console.log('useAdmin: Current status:', adminStatus);
   return adminStatus;
 };
 

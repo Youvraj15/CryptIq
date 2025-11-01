@@ -1,3 +1,4 @@
+// src/pages/Admin.tsx - Fixed version
 import React, { useState, useEffect } from 'react';
 import {
   Card,
@@ -104,7 +105,8 @@ type UserProfile = {
 // --- Main Admin Page Component ---
 
 const Admin = () => {
-  const { isAdmin, isLoading: isAdminLoading } = useAdmin();
+  // FIX: Changed from isLoading to loading to match useAdmin hook
+  const { isAdmin, isSuperAdmin, loading: isAdminLoading } = useAdmin();
   const { user } = useAuth();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
@@ -117,9 +119,14 @@ const Admin = () => {
 
   // --- Data Fetching Function ---
   const fetchData = async () => {
-    if (!user || !isAdmin) return;
+    if (!user || !isAdmin) {
+      console.log('Skipping fetch - not admin or no user');
+      return;
+    }
     setIsLoading(true);
     try {
+      console.log('Fetching admin data...');
+      
       // 1. Fetch Stats
       const [userStats, quizStats, completionStats] = await Promise.all([
         supabase.from('profiles').select('*', { count: 'exact', head: true }),
@@ -132,6 +139,7 @@ const Admin = () => {
         quizzes: quizStats.count ?? 0,
         completions: completionStats.count ?? 0,
       });
+      console.log('Stats:', { users: userStats.count, quizzes: quizStats.count, completions: completionStats.count });
 
       // 2. Fetch Quizzes, Users, and Recent Activity
       const [quizData, userData, completionData] = await Promise.all([
@@ -148,13 +156,19 @@ const Admin = () => {
       if (userData.error) throw new Error(`Users Error: ${userData.error.message}`);
       if (completionData.error) throw new Error(`Completions Error: ${completionData.error.message}`);
       
-      // --- FIX: Ensure data is always an array ---
+      // Ensure data is always an array
       setQuizzes(quizData.data || []);
       setUsers(userData.data || []); 
       setRecentCompletions(completionData.data || []);
-      // --- End of FIX ---
+      
+      console.log('Data loaded:', {
+        quizzes: quizData.data?.length,
+        users: userData.data?.length,
+        completions: completionData.data?.length
+      });
 
     } catch (error: any) {
+      console.error('Error fetching admin data:', error);
       toast({
         title: 'Error fetching admin data',
         description: error.message,
@@ -171,10 +185,13 @@ const Admin = () => {
 
   // Fetch data on load and when admin status is confirmed
   useEffect(() => {
-    if (user && isAdmin) {
+    console.log('useEffect triggered:', { user: !!user, isAdmin, isAdminLoading });
+    if (user && isAdmin && !isAdminLoading) {
       fetchData();
+    } else if (!isAdminLoading) {
+      setIsLoading(false);
     }
-  }, [user, isAdmin]);
+  }, [user, isAdmin, isAdminLoading]);
 
   // --- Auth & Loading Guards ---
   if (isAdminLoading) {
@@ -208,7 +225,6 @@ const Admin = () => {
           <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
           <TabsTrigger value="quizzes">Quizzes</TabsTrigger>
           <TabsTrigger value="users">Users</TabsTrigger>
-          {/* <TabsTrigger value="labs">Labs</TabsTrigger> */}
         </TabsList>
         
         {/* --- Dashboard Tab --- */}
@@ -258,7 +274,6 @@ const Admin = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {/* --- NEW DEFENSIVE GUARD --- */}
                   {isLoading ? (
                     <TableRow>
                       <TableCell colSpan={4} className="text-center">
@@ -320,7 +335,7 @@ const QuizManagementTab = ({ quizzes, refetchQuizzes }: { quizzes: Quiz[], refet
   };
 
   const handleAddNew = () => {
-    setSelectedQuiz(null); // Clear selection for a new form
+    setSelectedQuiz(null);
     setIsDialogOpen(true);
   };
   
@@ -332,7 +347,6 @@ const QuizManagementTab = ({ quizzes, refetchQuizzes }: { quizzes: Quiz[], refet
   const deleteQuiz = async () => {
     if (!selectedQuiz) return;
     
-    // 1. Delete associated questions first
     const { error: questionsError } = await supabase
       .from('quiz_questions')
       .delete()
@@ -343,7 +357,6 @@ const QuizManagementTab = ({ quizzes, refetchQuizzes }: { quizzes: Quiz[], refet
       return;
     }
 
-    // 2. Delete associated completions first
     const { error: completionsError } = await supabase
       .from('quiz_completions')
       .delete()
@@ -354,7 +367,6 @@ const QuizManagementTab = ({ quizzes, refetchQuizzes }: { quizzes: Quiz[], refet
       return;
     }
       
-    // 3. Delete the quiz itself
     const { error: quizError } = await supabase
       .from('quizzes')
       .delete()
@@ -395,7 +407,6 @@ const QuizManagementTab = ({ quizzes, refetchQuizzes }: { quizzes: Quiz[], refet
             </TableRow>
           </TableHeader>
           <TableBody>
-            {/* --- NEW DEFENSIVE GUARD --- */}
             {!Array.isArray(quizzes) || quizzes.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={6} className="text-center text-muted-foreground">
@@ -425,7 +436,6 @@ const QuizManagementTab = ({ quizzes, refetchQuizzes }: { quizzes: Quiz[], refet
         </Table>
       </CardContent>
       
-      {/* --- Edit/Create Dialog --- */}
       <QuizEditDialog
         open={isDialogOpen}
         onOpenChange={setIsDialogOpen}
@@ -433,7 +443,6 @@ const QuizManagementTab = ({ quizzes, refetchQuizzes }: { quizzes: Quiz[], refet
         onSave={refetchQuizzes}
       />
       
-      {/* --- Delete Alert --- */}
       <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -502,7 +511,6 @@ const QuizEditDialog = ({ open, onOpenChange, quiz, onSave }: {
     setIsSaving(true);
     try {
       if (quiz) {
-        // Update existing quiz
         const { error } = await supabase
           .from('quizzes')
           .update(values)
@@ -510,8 +518,6 @@ const QuizEditDialog = ({ open, onOpenChange, quiz, onSave }: {
         if (error) throw error;
         toast({ title: 'Success', description: 'Quiz updated successfully.' });
       } else {
-        // Create new quiz
-        // We need to get the ID back to create questions
         const { data, error } = await supabase
           .from('quizzes')
           .insert(values)
@@ -522,8 +528,6 @@ const QuizEditDialog = ({ open, onOpenChange, quiz, onSave }: {
         if (!data) throw new Error("Could not retrieve new quiz ID.");
         
         toast({ title: 'Success', description: 'Quiz created successfully.' });
-        // Optionally, you could open the question editor here
-        // e.g., onSave(data.id)
       }
       onSave();
       onOpenChange(false);
@@ -706,7 +710,6 @@ const UserManagementTab = ({ users, isLoading }: { users: UserProfile[], isLoadi
             </TableRow>
           </TableHeader>
           <TableBody>
-            {/* --- NEW DEFENSIVE GUARD --- */}
             {isLoading ? (
               <TableRow>
                 <TableCell colSpan={6} className="text-center">
