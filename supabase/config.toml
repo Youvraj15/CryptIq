@@ -1,1 +1,4 @@
 project_id = "arpghkhpgwsybjtgjkty"
+
+[functions.transfer-jiet-reward]
+verify_jwt = true
