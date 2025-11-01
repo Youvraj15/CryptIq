@@ -3,7 +3,13 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { Connection, Keypair, PublicKey, Transaction } from "https://esm.sh/@solana/web3.js@1.95.8";
-import { TOKEN_PROGRAM_ID, createTransferInstruction, getAssociatedTokenAddress } from "https://esm.sh/@solana/spl-token@0.4.11";
+import { 
+  TOKEN_PROGRAM_ID, 
+  createTransferInstruction, 
+  getAssociatedTokenAddress,
+  createAssociatedTokenAccountInstruction,
+  getAccount
+} from "https://esm.sh/@solana/spl-token@0.4.11";
 import bs58 from "https://esm.sh/bs58@6.0.0";
 
 const corsHeaders = {
@@ -76,10 +82,32 @@ serve(async (req) => {
     const senderTokenAccount = await getAssociatedTokenAddress(mintPublicKey, senderKeypair.publicKey);
     const recipientTokenAccount = await getAssociatedTokenAddress(mintPublicKey, recipientPublicKey);
 
+    // Check if recipient token account exists, create if not
+    const transaction = new Transaction();
+    try {
+      await getAccount(connection, recipientTokenAccount);
+      console.log('Recipient token account exists');
+    } catch (error: any) {
+      if (error?.message?.includes('could not find account')) {
+        console.log('Creating recipient token account...');
+        transaction.add(
+          createAssociatedTokenAccountInstruction(
+            senderKeypair.publicKey, // payer
+            recipientTokenAccount,
+            recipientPublicKey, // owner
+            mintPublicKey
+          )
+        );
+      } else {
+        throw error;
+      }
+    }
+
     // Assuming 6 decimals
     const amount = BigInt(Math.floor(QUIZ_REWARD_AMOUNT * 1_000_000));
 
-    const transaction = new Transaction().add(
+    // Add transfer instruction
+    transaction.add(
       createTransferInstruction(
         senderTokenAccount,
         recipientTokenAccount,
@@ -121,10 +149,10 @@ serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error claiming single reward:', error);
     return new Response(
-      JSON.stringify({ success: false, error: error.message }),
+      JSON.stringify({ success: false, error: error?.message || 'Unknown error occurred' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
