@@ -15,12 +15,15 @@ import bs58 from "https://esm.sh/bs58@6.0.0";
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Max-Age': '86400',
 };
 
 const JIET_TOKEN_MINT = "mntS6ZetAcdw5dLFFtLw3UEX3BZW5RkDPamSpEmpSbP";
 // Define a fixed reward amount per quiz
 const QUIZ_REWARD_AMOUNT = 10; // 10 JIET tokens
 const MIN_SCORE_TO_CLAIM = 70; // Must score 70% or higher
+const TOKEN_DECIMALS = 9; // JIET token uses 9 decimals
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -51,10 +54,7 @@ serve(async (req) => {
     // 4. Check for existing completion and rules
     const { data: existingCompletion, error: selectError } = await supabase
       .from('quiz_completions')
-      .select('*')
-      .eq('user_id', user.id)
-      .eq('quiz_id', quizId)
-      .single(); // Get a single record
+      .maybeSingle(); // Return null if no record
 
     if (selectError && selectError.code !== 'PGRST116') {
       // PGRST116 means "no rows found", which is fine. Other errors are not.
@@ -103,8 +103,8 @@ serve(async (req) => {
       }
     }
 
-    // Assuming 6 decimals
-    const amount = BigInt(Math.floor(QUIZ_REWARD_AMOUNT * 1_000_000));
+    // Assuming TOKEN_DECIMALS
+    const amount = BigInt(Math.floor(QUIZ_REWARD_AMOUNT * Math.pow(10, TOKEN_DECIMALS)));
 
     // Add transfer instruction
     transaction.add(
