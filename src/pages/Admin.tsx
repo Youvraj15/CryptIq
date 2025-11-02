@@ -130,7 +130,7 @@ const Admin = () => {
       // 1. Fetch Stats
       const [userStats, quizStats, completionStats] = await Promise.all([
         supabase.from('profiles').select('*', { count: 'exact', head: true }),
-        supabase.from('quizzes').select('*', { count: 'exact', head: true }),
+        supabase.from('quizzes' as any).select('*', { count: 'exact', head: true }),
         supabase.from('quiz_completions').select('*', { count: 'exact', head: true }),
       ]);
 
@@ -141,30 +141,67 @@ const Admin = () => {
       });
       console.log('Stats:', { users: userStats.count, quizzes: quizStats.count, completions: completionStats.count });
 
-      // 2. Fetch Quizzes, Users, and Recent Activity
-      const [quizData, userData, completionData] = await Promise.all([
-        supabase.from('quizzes').select('*').order('sort_order', { ascending: true }),
-        supabase.from('profiles').select('*, user_stats(*), admin_roles(role)'),
+      // 2. Fetch Quizzes, Users, User Stats, Admin Roles, and Recent Activity
+      const [quizData, profilesData, userStatsData, adminRolesData, completionData] = await Promise.all([
+        supabase.from('quizzes' as any).select('*').order('sort_order', { ascending: true }),
+        supabase.from('profiles').select('*'),
+        supabase.from('user_stats' as any).select('*'),
+        supabase.from('admin_roles' as any).select('*'),
         supabase
           .from('quiz_completions')
-          .select('id, score, completed_at, profiles(username), quizzes(title)')
+          .select('id, score, completed_at, user_id, quiz_id')
           .order('completed_at', { ascending: false })
           .limit(5),
       ]);
 
       if (quizData.error) throw new Error(`Quizzes Error: ${quizData.error.message}`);
-      if (userData.error) throw new Error(`Users Error: ${userData.error.message}`);
+      if (profilesData.error) throw new Error(`Profiles Error: ${profilesData.error.message}`);
+      if (userStatsData.error) throw new Error(`User Stats Error: ${userStatsData.error.message}`);
+      if (adminRolesData.error) throw new Error(`Admin Roles Error: ${adminRolesData.error.message}`);
       if (completionData.error) throw new Error(`Completions Error: ${completionData.error.message}`);
       
+      // Combine user data from different tables
+      const combinedUsers: UserProfile[] = (profilesData.data || []).map((profile: any) => {
+        const stats = (userStatsData.data || []).find((s: any) => s.user_id === profile.user_id);
+        const adminRole = (adminRolesData.data || []).find((r: any) => r.user_id === profile.user_id);
+        
+        return {
+          id: profile.id,
+          user_id: profile.user_id,
+          full_name: profile.full_name,
+          username: profile.username,
+          user_stats: stats ? {
+            total_xp: stats.total_xp,
+            quizzes_completed: stats.quizzes_completed,
+            labs_completed: stats.labs_completed,
+          } : null,
+          admin_roles: adminRole ? { role: adminRole.role } : null,
+        };
+      });
+
+      // Enrich completions with user and quiz data
+      const enrichedCompletions = (completionData.data || []).map((comp: any) => {
+        const profile = combinedUsers.find(u => u.user_id === comp.user_id);
+        const quiz = (quizData.data || []).find((q: any) => q.id === comp.quiz_id);
+        
+        return {
+          id: comp.id,
+          score: comp.score,
+          completed_at: comp.completed_at,
+          profiles: profile ? { username: profile.username } : null,
+          quizzes: quiz ? { title: quiz.title } : null,
+        };
+      });
+      
       // Ensure data is always an array
-      setQuizzes(quizData.data || []);
-      setUsers(userData.data || []); 
-      setRecentCompletions(completionData.data || []);
+      setQuizzes((quizData.data || []) as Quiz[]);
+      setUsers(combinedUsers); 
+      setRecentCompletions(enrichedCompletions);
       
       console.log('Data loaded:', {
         quizzes: quizData.data?.length,
-        users: userData.data?.length,
-        completions: completionData.data?.length
+        users: combinedUsers.length,
+        completions: enrichedCompletions.length
       });
 
     } catch (error: any) {
@@ -348,7 +385,7 @@ const QuizManagementTab = ({ quizzes, refetchQuizzes }: { quizzes: Quiz[], refet
     if (!selectedQuiz) return;
     
     const { error: questionsError } = await supabase
-      .from('quiz_questions')
+      .from('quiz_questions' as any)
       .delete()
       .eq('quiz_id', selectedQuiz.id);
       
@@ -368,7 +405,7 @@ const QuizManagementTab = ({ quizzes, refetchQuizzes }: { quizzes: Quiz[], refet
     }
       
     const { error: quizError } = await supabase
-      .from('quizzes')
+      .from('quizzes' as any)
       .delete()
       .eq('id', selectedQuiz.id);
       
@@ -512,14 +549,14 @@ const QuizEditDialog = ({ open, onOpenChange, quiz, onSave }: {
     try {
       if (quiz) {
         const { error } = await supabase
-          .from('quizzes')
+          .from('quizzes' as any)
           .update(values)
           .eq('id', quiz.id);
         if (error) throw error;
         toast({ title: 'Success', description: 'Quiz updated successfully.' });
       } else {
         const { data, error } = await supabase
-          .from('quizzes')
+          .from('quizzes' as any)
           .insert(values)
           .select('id')
           .single();

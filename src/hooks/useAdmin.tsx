@@ -30,10 +30,10 @@ export const useAdmin = (): AdminStatus => {
       try {
         // Method 1: Check using database function (preferred)
         const { data: isAdminData, error: isAdminError } = await supabase
-          .rpc('is_admin', { check_user_id: user.id });
+          .rpc('is_admin' as any, { check_user_id: user.id });
 
-        const { data: isSuperAdminData, error: isSuperAdminError } = await supabase
-          .rpc('is_super_admin', { check_user_id: user.id });
+        const { data: isSuperAdminData, error: isSuperAdminError} = await supabase
+          .rpc('is_super_admin' as any, { check_user_id: user.id });
 
         console.log('useAdmin: RPC results', {
           isAdminData,
@@ -57,7 +57,7 @@ export const useAdmin = (): AdminStatus => {
 
         // Method 2: Direct query fallback
         const { data: adminRoleData, error: roleError } = await supabase
-          .from('admin_roles')
+          .from('admin_roles' as any)
           .select('role')
           .eq('user_id', user.id)
           .maybeSingle();
@@ -89,7 +89,7 @@ export const useAdmin = (): AdminStatus => {
 
         const status = {
           isAdmin: !!adminRoleData,
-          isSuperAdmin: adminRoleData?.role === 'super_admin',
+          isSuperAdmin: (adminRoleData as any)?.role === 'super_admin',
           loading: false,
         };
         console.log('useAdmin: Setting status from direct query:', status);
@@ -116,7 +116,7 @@ export const logAdminAction = async (
   details?: any
 ) => {
   try {
-    const { data, error } = await supabase.rpc('log_admin_action', {
+    const { data, error } = await supabase.rpc('log_admin_action' as any, {
       p_action_type: actionType,
       p_entity_type: entityType,
       p_entity_id: entityId,
