@@ -148,7 +148,7 @@ const Quiz = () => {
             user_id: user.id,
             quiz_id: quizId,
             score: score,
-          }, { onConflict: ['user_id', 'quiz_id'] });
+          }, { onConflict: 'user_id,quiz_id' });
 
         // --- NEW: Update XP in user_stats table ---
         if (shouldAwardXp && xpToAdd > 0) {
@@ -316,7 +316,7 @@ const handleClaimReward = async (quizId: number, score: number) => {
 
     // TODO: Add a loading state
     try {
-      const { data, error } = await supabase
+      const { data, error } = await supabaseDb
         .from('quiz_questions')
         .select('id, question_text, options, correct_answer_index, explanation, sort_order')
         .eq('quiz_id', quizId)

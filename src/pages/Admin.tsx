@@ -60,7 +60,7 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, PlusCircle, Edit, Trash2, Users, BookCopy, CheckSquare } from 'lucide-react';
+import { Loader2, PlusCircle, Edit, Trash2, Users, BookCopy, CheckSquare, FileQuestion } from 'lucide-react';
 
 import { useAdmin } from '@/hooks/useAdmin';
 import { useAuth } from '@/hooks/useAuth';
@@ -70,6 +70,7 @@ import { useToast } from '@/hooks/use-toast';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
+import { QuizQuestionManager } from '@/components/QuizQuestionManager';
 
 // Zod schema for quiz form validation, matching your DB
 const quizFormSchema = z.object({
@@ -365,6 +366,8 @@ const QuizManagementTab = ({ quizzes, refetchQuizzes }: { quizzes: Quiz[], refet
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isAlertOpen, setIsAlertOpen] = useState(false);
   const [selectedQuiz, setSelectedQuiz] = useState<Quiz | null>(null);
+  const [isQuestionManagerOpen, setIsQuestionManagerOpen] = useState(false);
+  const [quizForQuestions, setQuizForQuestions] = useState<{ id: number; title: string } | null>(null);
   const { toast } = useToast();
 
   const handleEdit = (quiz: Quiz) => {
@@ -380,6 +383,11 @@ const QuizManagementTab = ({ quizzes, refetchQuizzes }: { quizzes: Quiz[], refet
   const handleDelete = (quiz: Quiz) => {
     setSelectedQuiz(quiz);
     setIsAlertOpen(true);
+  };
+
+  const handleManageQuestions = (quiz: Quiz) => {
+    setQuizForQuestions({ id: quiz.id, title: quiz.title });
+    setIsQuestionManagerOpen(true);
   };
 
   const deleteQuiz = async () => {
@@ -463,6 +471,9 @@ const QuizManagementTab = ({ quizzes, refetchQuizzes }: { quizzes: Quiz[], refet
                     <Button variant="outline" size="sm" onClick={() => handleEdit(quiz)}>
                       <Edit className="h-4 w-4" />
                     </Button>
+                    <Button variant="secondary" size="sm" onClick={() => handleManageQuestions(quiz)}>
+                      <FileQuestion className="h-4 w-4" />
+                    </Button>
                     <Button variant="destructive" size="sm" onClick={() => handleDelete(quiz)}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -496,6 +507,16 @@ const QuizManagementTab = ({ quizzes, refetchQuizzes }: { quizzes: Quiz[], refet
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Question Manager Dialog */}
+      {quizForQuestions && (
+        <QuizQuestionManager
+          open={isQuestionManagerOpen}
+          onOpenChange={setIsQuestionManagerOpen}
+          quizId={quizForQuestions.id}
+          quizTitle={quizForQuestions.title}
+        />
+      )}
       
     </Card>
   );

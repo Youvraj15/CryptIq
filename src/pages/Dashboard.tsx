@@ -202,7 +202,7 @@ useEffect(() => {
       console.log('Function call failed, trying manual query...', functionError);
 
       // Method 2: Manual query fallback
-      const { data: statsData, error: statsError } = await supabase
+      const { data: statsData, error: statsError } = await supabaseDb
         .from('user_stats')
         .select('user_id, total_xp')
         .order('total_xp', { ascending: false })

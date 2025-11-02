@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Award, CheckCircle, Lock, Code, Target, Key } from 'lucide-react'; // Removed Bug, Binary
+import { Award, CheckCircle, Lock, Code, Target, Key } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { LabModal } from '@/components/LabModal';
 import { useToast } from '@/hooks/use-toast';
 import { useLabCompletion } from '@/hooks/useLabCompletion';
+import { supabase } from '@/integrations/supabase/client';
 import { supabaseDb } from '@/lib/supabase-types';
 import { Skeleton } from '@/components/ui/skeleton';
 

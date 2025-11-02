@@ -22,6 +22,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 // Supabase & Auth
 import { supabase } from '@/integrations/supabase/client';
+import { supabaseDb } from '@/lib/supabase-types';
 import { useAuth } from '@/hooks/useAuth'; // Assumed auth hook
 import { useUserProgress } from '@/hooks/useUserProgress.tsx';
 
@@ -119,7 +120,7 @@ const Rewards = () => {
     const fetchRewards = async () => {
       setRewardsLoading(true);
       try {
-        const { data, error } = await supabase
+        const { data, error } = await supabaseDb
           .from('rewards')
           .select('*')
           .eq('available', true)
@@ -484,7 +485,7 @@ const Rewards = () => {
                         {achievement.earned && (
                           <CheckCircle className="w-6 h-6 text-green-500" />
                         )}
-                        {achievement.locked && (
+                        {!achievement.earned && achievement.locked && (
                           <Lock className="w-6 h-6 text-muted-foreground" />
                         )}
                       </div>
@@ -500,13 +501,6 @@ const Rewards = () => {
                         >
                           +{achievement.xp} XP
                         </Badge>
-                        {achievement.earned && achievement.earnedDate && (
-                          <span className="text-xs text-muted-foreground">
-                            {new Date(
-                              achievement.earnedDate
-                            ).toLocaleDateString()}
-                          </span>
-                        )}
                       </div>
                     </CardContent>
                   </Card>

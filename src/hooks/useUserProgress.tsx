@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/hooks/useAuth'; // We use this to get the user
-import type { Database } from '@/integrations/supabase/types'; // Import your Supabase types
+import { supabaseDb } from '@/lib/supabase-types';
+import { useAuth } from '@/hooks/useAuth';
 
-// Define the shape of your data
-type QuizCompletion = Database['public']['Tables']['quiz_completions']['Row'];
-type LabCompletion = Database['public']['Tables']['lab_completions']['Row'];
-type UserStats = Database['public']['Tables']['user_stats']['Row'];
+// Simple types without Database reference
+type QuizCompletion = { quiz_id: number; score: number; user_id: string };
+type LabCompletion = { lab_id: number; user_id: string };
+type UserStats = { total_xp: number; quizzes_completed: number; labs_completed: number; user_id: string };
 
 export interface UserProgress {
   stats: UserStats | null;
@@ -32,9 +32,9 @@ export const useUserProgress = (): UserProgress => {
       setLoading(true);
       try {
         // Fetch from user_stats table
-        const { data: statsData, error: statsError } = await supabase
+        const { data: statsData, error: statsError } = await supabaseDb
           .from('user_stats')
-          .select('total_xp, quizzes_completed, labs_completed')
+          .select('total_xp, quizzes_completed, labs_completed, user_id')
           .eq('user_id', user.id)
           .maybeSingle();
 
@@ -51,14 +51,14 @@ export const useUserProgress = (): UserProgress => {
         if (quizError) throw quizError;
         setQuizCompletions(quizData || []);
 
-        // Fetch from lab_completions table
-        const { data: labData, error: labError } = await supabase
-          .from('lab_completions')
-          .select('lab_id')
+        // Fetch from lab_task_completions table
+        const { data: labData, error: labError } = await supabaseDb
+          .from('lab_task_completions')
+          .select('task_id, user_id')
           .eq('user_id', user.id);
 
         if (labError) throw labError;
-        setLabCompletions(labData || []);
+        setLabCompletions((labData || []).map(d => ({ lab_id: d.task_id, user_id: d.user_id })));
 
       } catch (error) {
         console.error('Error fetching user progress:', error);
