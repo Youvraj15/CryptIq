@@ -1,5 +1,3 @@
-// src/pages/Quiz.tsx
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { QuizModal } from '@/components/QuizModal';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { supabaseDb } from '@/lib/supabase-types';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils'; // Make sure to import cn
@@ -50,7 +49,7 @@ const Quiz = () => {
   useEffect(() => {
     const loadQuizzes = async () => {
       try {
-        const { data, error } = await supabase
+        const { data, error } = await supabaseDb
           .from('quizzes')
           .select('id, title, description, difficulty, xp_reward, duration_minutes, question_count, is_locked')
           .order('sort_order', { ascending: true });
@@ -62,7 +61,7 @@ const Quiz = () => {
         }
 
         if (data) {
-          setQuizzes(data as Quiz[]);
+          setQuizzes(data as any);
         }
       } catch (err) {
         console.error('Failed to load quizzes', err);
@@ -153,7 +152,7 @@ const Quiz = () => {
 
         // --- NEW: Update XP in user_stats table ---
         if (shouldAwardXp && xpToAdd > 0) {
-          const { error: rpcError } = await supabase.rpc('increment_user_xp', { 
+          const { error: rpcError } = await supabaseDb.rpc('increment_user_xp', { 
             p_user_id: user.id, 
             p_xp_to_add: xpToAdd 
           });

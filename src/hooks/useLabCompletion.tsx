@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { supabaseDb } from '@/lib/supabase-types';
 import { useAuth } from './useAuth';
 
 export const useLabCompletion = () => {
@@ -11,13 +11,13 @@ export const useLabCompletion = () => {
     if (!user) return [];
 
     try {
-      const { data, error } = await supabase
+      const { data, error } = await supabaseDb
         .from('lab_task_completions')
         .select('task_id')
         .eq('user_id', user.id);
 
       if (error) throw error;
-      return data.map((item) => item.task_id) || [];
+      return (data || []).map((item: any) => item.task_id);
     } catch (error) {
       console.error('Error fetching completed tasks:', error);
       return [];
@@ -32,7 +32,7 @@ export const useLabCompletion = () => {
 
     try {
       // Check if already completed
-      const { data: existing, error: checkError } = await supabase
+      const { data: existing, error: checkError } = await supabaseDb
         .from('lab_task_completions')
         .select('id')
         .eq('user_id', user.id)
@@ -49,7 +49,7 @@ export const useLabCompletion = () => {
       }
 
       // Insert new completion
-      const { error: insertError } = await supabase
+      const { error: insertError } = await supabaseDb
         .from('lab_task_completions')
         .insert({
           user_id: user.id,

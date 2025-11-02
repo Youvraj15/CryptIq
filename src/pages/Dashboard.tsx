@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Trophy, Flame, BookOpen, FlaskConical, Gift, TrendingUp, Target, Award, Upload, Camera, Pencil } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { supabase } from '@/integrations/supabase/client';
+import { supabaseDb } from '@/lib/supabase-types';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -73,7 +74,7 @@ const Dashboard = () => {
         }
 
         // Fetch or create user stats
-        let { data: statsData, error: statsError } = await supabase
+        let { data: statsData, error: statsError } = await supabaseDb
           .from('user_stats')
           .select('*')
           .eq('user_id', user.id)
@@ -81,7 +82,7 @@ const Dashboard = () => {
 
         if (statsError && statsError.code === 'PGRST116') {
           // User stats don't exist, create them
-          const { data: newStats, error: createError } = await supabase
+          const { data: newStats, error: createError } = await supabaseDb
             .from('user_stats')
             .insert({ user_id: user.id })
             .select()
@@ -93,7 +94,7 @@ const Dashboard = () => {
         }
 
         if (statsData) {
-          setStats(statsData);
+          setStats(statsData as any);
         }
 
         // Fetch JIET balance from quiz completions
@@ -179,11 +180,11 @@ useEffect(() => {
       console.log('Fetching leaderboard...');
       
       // Method 1: Using the database function (recommended)
-      const { data: functionData, error: functionError } = await supabase
+      const { data: functionData, error: functionError} = await supabaseDb
         .rpc('get_leaderboard', { limit_count: 10 });
 
       if (!functionError && functionData) {
-        const leaderboardData: LeaderboardEntry[] = functionData.map((entry: any) => ({
+        const leaderboardData: LeaderboardEntry[] = (functionData as any[]).map((entry: any) => ({
           user_id: entry.user_id,
           username: entry.username || 'Anonymous',
           full_name: entry.full_name || '',

@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { LabModal } from '@/components/LabModal';
 import { useToast } from '@/hooks/use-toast';
 import { useLabCompletion } from '@/hooks/useLabCompletion';
-import { supabase } from '@/integrations/supabase/client';
+import { supabaseDb } from '@/lib/supabase-types';
 import { Skeleton } from '@/components/ui/skeleton';
 
 // 1. Define types for our NEW data structures
@@ -71,18 +71,18 @@ const Labs = () => {
       setIsLoading(true);
       try {
         // Fetch categories
-        const { data: categories, error: catError } = await supabase
+        const { data: categories, error: catError } = await supabaseDb
           .from('labs')
           .select('*');
         if (catError) throw catError;
-        if (categories) setLabCategories(categories);
+        if (categories) setLabCategories(categories as any);
 
         // Fetch all tasks
-        const { data: tasks, error: taskError } = await supabase
+        const { data: tasks, error: taskError } = await supabaseDb
           .from('lab_tasks')
           .select('id, lab_id, title, description, challenge_data, xp_reward, is_locked');
         if (taskError) throw taskError;
-        if (tasks) setLabTasks(tasks);
+        if (tasks) setLabTasks(tasks as any);
 
         // Fetch completed tasks
         const completed = await getCompletedTasks();

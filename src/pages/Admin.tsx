@@ -65,6 +65,7 @@ import { Loader2, PlusCircle, Edit, Trash2, Users, BookCopy, CheckSquare } from 
 import { useAdmin } from '@/hooks/useAdmin';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
+import { supabaseDb } from '@/lib/supabase-types';
 import { useToast } from '@/hooks/use-toast';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -130,7 +131,7 @@ const Admin = () => {
       // 1. Fetch Stats
       const [userStats, quizStats, completionStats] = await Promise.all([
         supabase.from('profiles').select('*', { count: 'exact', head: true }),
-        supabase.from('quizzes' as any).select('*', { count: 'exact', head: true }),
+        supabaseDb.from('quizzes').select('*', { count: 'exact', head: true }),
         supabase.from('quiz_completions').select('*', { count: 'exact', head: true }),
       ]);
 
@@ -143,10 +144,10 @@ const Admin = () => {
 
       // 2. Fetch Quizzes, Users, User Stats, Admin Roles, and Recent Activity
       const [quizData, profilesData, userStatsData, adminRolesData, completionData] = await Promise.all([
-        supabase.from('quizzes' as any).select('*').order('sort_order', { ascending: true }),
+        supabaseDb.from('quizzes').select('*').order('sort_order', { ascending: true }),
         supabase.from('profiles').select('*'),
-        supabase.from('user_stats' as any).select('*'),
-        supabase.from('admin_roles' as any).select('*'),
+        supabaseDb.from('user_stats').select('*'),
+        supabaseDb.from('admin_roles').select('*'),
         supabase
           .from('quiz_completions')
           .select('id, score, completed_at, user_id, quiz_id')
@@ -194,7 +195,7 @@ const Admin = () => {
       });
       
       // Ensure data is always an array
-      setQuizzes((quizData.data || []) as Quiz[]);
+      setQuizzes((quizData.data || []) as any);
       setUsers(combinedUsers); 
       setRecentCompletions(enrichedCompletions);
       
@@ -384,8 +385,8 @@ const QuizManagementTab = ({ quizzes, refetchQuizzes }: { quizzes: Quiz[], refet
   const deleteQuiz = async () => {
     if (!selectedQuiz) return;
     
-    const { error: questionsError } = await supabase
-      .from('quiz_questions' as any)
+    const { error: questionsError } = await supabaseDb
+      .from('quiz_questions')
       .delete()
       .eq('quiz_id', selectedQuiz.id);
       
@@ -404,8 +405,8 @@ const QuizManagementTab = ({ quizzes, refetchQuizzes }: { quizzes: Quiz[], refet
       return;
     }
       
-    const { error: quizError } = await supabase
-      .from('quizzes' as any)
+    const { error: quizError } = await supabaseDb
+      .from('quizzes')
       .delete()
       .eq('id', selectedQuiz.id);
       
@@ -548,15 +549,15 @@ const QuizEditDialog = ({ open, onOpenChange, quiz, onSave }: {
     setIsSaving(true);
     try {
       if (quiz) {
-        const { error } = await supabase
-          .from('quizzes' as any)
+        const { error } = await supabaseDb
+          .from('quizzes')
           .update(values)
           .eq('id', quiz.id);
         if (error) throw error;
         toast({ title: 'Success', description: 'Quiz updated successfully.' });
       } else {
-        const { data, error } = await supabase
-          .from('quizzes' as any)
+        const { data, error } = await supabaseDb
+          .from('quizzes')
           .insert(values)
           .select('id')
           .single();

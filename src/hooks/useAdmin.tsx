@@ -1,6 +1,6 @@
 // src/hooks/useAdmin.tsx - IMPROVED VERSION
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { supabaseDb } from '@/lib/supabase-types';
 import { useAuth } from '@/hooks/useAuth';
 
 interface AdminStatus {
@@ -29,11 +29,11 @@ export const useAdmin = (): AdminStatus => {
 
       try {
         // Method 1: Check using database function (preferred)
-        const { data: isAdminData, error: isAdminError } = await supabase
-          .rpc('is_admin' as any, { check_user_id: user.id });
+        const { data: isAdminData, error: isAdminError } = await supabaseDb
+          .rpc('is_admin', { check_user_id: user.id });
 
-        const { data: isSuperAdminData, error: isSuperAdminError} = await supabase
-          .rpc('is_super_admin' as any, { check_user_id: user.id });
+        const { data: isSuperAdminData, error: isSuperAdminError} = await supabaseDb
+          .rpc('is_super_admin', { check_user_id: user.id });
 
         console.log('useAdmin: RPC results', {
           isAdminData,
@@ -56,8 +56,8 @@ export const useAdmin = (): AdminStatus => {
         console.log('useAdmin: RPC functions not available or failed, trying direct query');
 
         // Method 2: Direct query fallback
-        const { data: adminRoleData, error: roleError } = await supabase
-          .from('admin_roles' as any)
+        const { data: adminRoleData, error: roleError } = await supabaseDb
+          .from('admin_roles')
           .select('role')
           .eq('user_id', user.id)
           .maybeSingle();
@@ -116,7 +116,7 @@ export const logAdminAction = async (
   details?: any
 ) => {
   try {
-    const { data, error } = await supabase.rpc('log_admin_action' as any, {
+    const { data, error } = await supabaseDb.rpc('log_admin_action', {
       p_action_type: actionType,
       p_entity_type: entityType,
       p_entity_id: entityId,
