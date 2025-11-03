@@ -2,3 +2,18 @@ project_id = "arpghkhpgwsybjtgjkty"
 
 [functions.transfer-jiet-reward]
 verify_jwt = false
+
+[functions.transfer-lab-reward]
+verify_jwt = false
+
+[functions.check-lab-flag]
+verify_jwt = true
+
+[functions.claim-pending-rewards]
+verify_jwt = true
+
+[functions.record-quiz-completion]
+verify_jwt = true
+
+[functions.redeem-reward]
+verify_jwt = true

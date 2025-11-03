@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Award, CheckCircle, Lock, Code, Target, Key } from 'lucide-react';
+import { Award, CheckCircle, Lock, Code, Target, Key, Coins } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { LabModal } from '@/components/LabModal';
 import { useToast } from '@/hooks/use-toast';
@@ -9,6 +9,8 @@ import { useLabCompletion } from '@/hooks/useLabCompletion';
 import { supabase } from '@/integrations/supabase/client';
 import { supabaseDb } from '@/lib/supabase-types';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useWallet } from '@solana/wallet-adapter-react';
+import { useAuth } from '@/hooks/useAuth';
 
 // 1. Define types for our NEW data structures
 interface LabCategory {
@@ -61,8 +63,12 @@ const Labs = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedTask, setSelectedTask] = useState<number | null>(null);
   const [completedTaskIds, setCompletedTaskIds] = useState<number[]>([]);
+  const [rewardedTaskIds, setRewardedTaskIds] = useState<Set<number>>(new Set());
+  const [isClaimingReward, setIsClaimingReward] = useState(false);
   
   const { toast } = useToast();
+  const { publicKey, connected } = useWallet();
+  const { user } = useAuth();
   // 3. Use the updated hook functions
   const { getCompletedTasks, completeTask } = useLabCompletion();
 
@@ -104,15 +110,80 @@ const Labs = () => {
     fetchAllData();
   }, [getCompletedTasks, toast]);
 
+  // Auto-claim JIET rewards for completing a lab task
+  const handleClaimLabReward = async (taskId: number) => {
+    if (!connected || !publicKey) {
+      return; // Silently skip if wallet not connected
+    }
+
+    if (rewardedTaskIds.has(taskId)) {
+      return; // Already claimed
+    }
+
+    setIsClaimingReward(true);
+
+    try {
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !sessionData.session) {
+        throw new Error('You must be logged in to claim rewards.');
+      }
+      const token = sessionData.session.access_token;
+
+      const { data, error } = await supabase.functions.invoke('transfer-lab-reward', {
+        body: JSON.stringify({
+          taskId: taskId,
+          walletAddress: publicKey.toString(),
+        }),
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        }
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      if (data.success === false) {
+        if (data.alreadyRewarded) {
+          setRewardedTaskIds(prev => new Set([...Array.from(prev), taskId]));
+        } else {
+          throw new Error(data.error || 'Unknown error occurred during claim');
+        }
+      } else if (data.success === true) {
+        setRewardedTaskIds(prev => new Set([...Array.from(prev), taskId]));
+        toast({
+          title: "🎉 You've earned JIET Coins for completing this challenge!",
+          description: `+${data.amount} JIET tokens sent to your wallet!`,
+        });
+      }
+
+    } catch (err: any) {
+      console.error('❌ Lab reward claim error:', err);
+      toast({
+        title: "Claim Failed",
+        description: err.message || "Failed to claim reward. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsClaimingReward(false);
+    }
+  };
+
   // This function is now CALLED by the modal on success
   const handleTaskComplete = async (task_id: number) => {
     try {
       const result = await completeTask(task_id); // Use new hook function
       if (result && result.success && !result.alreadyCompleted) {
         setCompletedTaskIds(prev => [...prev, task_id]);
+        
+        // Automatically claim JIET reward if wallet is connected
+        if (connected && publicKey && !rewardedTaskIds.has(task_id)) {
+          handleClaimLabReward(task_id);
+        }
+        
         toast({
-          title: 'Challenge completed!',
-          description: 'XP awarded!'
+          title: 'Challenge completed! 🎉',
+          description: connected ? 'Claiming your JIET tokens...' : 'Connect wallet to earn JIET tokens!'
         });
       } else if (result && result.alreadyCompleted) {
         toast({
@@ -180,6 +251,28 @@ const Labs = () => {
           Test your cryptography and code-breaking skills.
         </p>
       </div>
+
+      {/* Wallet Connection Notice */}
+      {!connected && (
+        <Card className="border-2 border-accent/50 bg-accent/5">
+          <CardContent className="p-6">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-accent/20 flex items-center justify-center flex-shrink-0">
+                <Coins className="w-6 h-6 text-accent" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-lg font-bold text-foreground mb-1">
+                  Connect Wallet to Earn JIET Tokens! 🪙
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  Complete lab challenges to earn JIET token rewards automatically. 
+                  Connect your wallet in the Rewards section!
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Stats Overview */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

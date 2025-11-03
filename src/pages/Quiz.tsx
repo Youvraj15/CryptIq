@@ -150,7 +150,7 @@ const Quiz = () => {
             score: score,
           }, { onConflict: 'user_id,quiz_id' });
 
-        // --- NEW: Update XP in user_stats table ---
+        // Update XP in user_stats table
         if (shouldAwardXp && xpToAdd > 0) {
           const { error: rpcError } = await supabaseDb.rpc('increment_user_xp', { 
             p_user_id: user.id, 
@@ -160,43 +160,29 @@ const Quiz = () => {
           if (rpcError) {
             console.error('Error updating total XP:', rpcError);
             toast({ title: "Error", description: "Failed to update your total XP.", variant: "destructive" });
-          } else {
-            // This toast might be redundant if the modal shows XP, but good for confirmation
-            toast({ title: "XP Gained!", description: `+${xpToAdd} XP added to your profile.` });
           }
         }
-        // --- End of NEW ---
           
       } catch (err) {
         console.error('Error saving quiz completion:', err);
       }
     }
 
+    // Automatically claim JIET reward if passed and wallet connected
+    if (isPass && connected && publicKey && !rewardedQuizzes.has(quizId) && !alreadyPassed) {
+      // Auto-claim reward in background
+      handleClaimReward(quizId, score);
+    }
+
     // Show completion toast
     if (isPass) {
-      // Passed the quiz
-      if (connected && publicKey && !rewardedQuizzes.has(quizId)) {
-        toast({
-          title: "Quiz Passed! 🎉",
-          description: `You scored ${score}%. Click below to claim your JIET tokens!`,
-          action: (
-            <Button
-              size="sm"
-              onClick={() => handleClaimReward(quizId, score)}
-              disabled={isClaimingReward}
-            >
-              {isClaimingReward ? 'Claiming...' : 'Claim Reward'}
-            </Button>
-          ),
-        });
-      } else {
-        toast({
-          title: "Quiz Passed! 🎉",
-          description: `You scored ${score}%. ${!connected ? 'Connect your wallet to claim JIET rewards!' : ''}`,
-        });
-      }
+      toast({
+        title: "Quiz Passed! 🎉",
+        description: connected ? 
+          `You scored ${score}%. ${!rewardedQuizzes.has(quizId) && !alreadyPassed ? 'Claiming your JIET tokens...' : ''}` :
+          `You scored ${score}%. Connect your wallet to earn JIET tokens!`,
+      });
     } else {
-      // Failed the quiz
       toast({
         title: "Quiz Complete",
         description: `You scored ${score}%. You need 70% to pass. Try again!`,
@@ -281,7 +267,7 @@ const handleClaimReward = async (quizId: number, score: number) => {
       // Mark as rewarded locally to update the UI
       setRewardedQuizzes(prev => new Set([...Array.from(prev), quizId]));
       toast({
-        title: "Reward Claimed! 🎉",
+        title: "🎉 You've earned JIET Coins for completing this challenge!",
         description: `+${data.amount} JIET tokens sent to your wallet!`,
       });
     } else {

@@ -5,6 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
+import { WalletSyncWrapper } from "@/components/WalletSyncWrapper";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import OTPVerificationPage from "./components/OTPVerificationPage";
@@ -26,23 +27,25 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
-          <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/register" element={<RegisterPage />} />
-            <Route path="/verify-otp" element={<OTPVerificationPage />} />
-            <Route path="/dashboard" element={<DashboardLayout />}>
-              <Route index element={<Dashboard />} />
-              <Route path="quiz" element={<Quiz />} />
-              <Route path="labs" element={<Labs />} />
-              <Route path="rewards" element={<Rewards />} />
-            </Route>
-            <Route path="/admin" element={<DashboardLayout />}>
-              <Route index element={<Admin />} />
-            </Route>
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+          <WalletSyncWrapper>
+            <Routes>
+              <Route path="/" element={<Index />} />
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/register" element={<RegisterPage />} />
+              <Route path="/verify-otp" element={<OTPVerificationPage />} />
+              <Route path="/dashboard" element={<DashboardLayout />}>
+                <Route index element={<Dashboard />} />
+                <Route path="quiz" element={<Quiz />} />
+                <Route path="labs" element={<Labs />} />
+                <Route path="rewards" element={<Rewards />} />
+              </Route>
+              <Route path="/admin" element={<DashboardLayout />}>
+                <Route index element={<Admin />} />
+              </Route>
+              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </WalletSyncWrapper>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>

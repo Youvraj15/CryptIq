@@ -1,5 +1,3 @@
-// supabase/functions/transfer-jiet-reward/index.ts
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { Connection, Keypair, PublicKey, Transaction } from "https://esm.sh/@solana/web3.js@1.98.0";
@@ -20,10 +18,8 @@ const corsHeaders = {
 };
 
 const JIET_TOKEN_MINT = "mntS6ZetAcdw5dLFFtLw3UEX3BZW5RkDPamSpEmpSbP";
-// Define a fixed reward amount per quiz
-const QUIZ_REWARD_AMOUNT = 10; // 10 JIET tokens
-const MIN_SCORE_TO_CLAIM = 70; // Must score 70% or higher
-const TOKEN_DECIMALS = 9; // JIET token uses 9 decimals
+const LAB_REWARD_AMOUNT = 15; // 15 JIET tokens per lab task
+const TOKEN_DECIMALS = 9;
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -31,11 +27,14 @@ serve(async (req) => {
   }
 
   try {
-    // 1. Setup Supabase and Solana clients
+    console.log('🎯 Lab reward request received');
+    
+    // 1. Setup Supabase
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
+    
     const privateKeyBase58 = Deno.env.get('SOLANA_WALLET_PRIVATE_KEY')!;
     if (!privateKeyBase58) throw new Error('Server not configured');
 
@@ -46,34 +45,39 @@ serve(async (req) => {
     if (userError || !user) throw new Error('Unauthorized');
     
     // 3. Get and validate request body
-    const { quizId, score, walletAddress } = await req.json();
-    if (!quizId || score === undefined || !walletAddress) {
-      throw new Error('quizId, score, and walletAddress are required');
+    const { taskId, walletAddress } = await req.json();
+    if (!taskId || !walletAddress) {
+      throw new Error('taskId and walletAddress are required');
     }
 
-    // 4. Check for existing completion and rules
+    console.log(`✅ Processing lab reward for user ${user.id}, task ${taskId}`);
+
+    // 4. Check if already rewarded
     const { data: existingCompletion, error: selectError } = await supabase
-      .from('quiz_completions')
-      .maybeSingle(); // Return null if no record
+      .from('lab_completions')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('task_id', taskId)
+      .maybeSingle();
 
     if (selectError && selectError.code !== 'PGRST116') {
-      // PGRST116 means "no rows found", which is fine. Other errors are not.
       throw selectError;
     }
 
-    if (score < MIN_SCORE_TO_CLAIM) {
-      return new Response(JSON.stringify({ success: false, error: "Score is too low to claim." }), {
-        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
     if (existingCompletion && existingCompletion.jiet_rewarded) {
-      return new Response(JSON.stringify({ success: false, alreadyRewarded: true, error: "Reward already claimed." }), {
-        status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      console.log('⚠️ Reward already claimed');
+      return new Response(JSON.stringify({ 
+        success: false, 
+        alreadyRewarded: true, 
+        error: "Reward already claimed." 
+      }), {
+        status: 409, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
     
     // 5. Send Solana transaction
+    console.log('💰 Sending JIET tokens...');
     const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
     const senderKeypair = Keypair.fromSecretKey(decode(privateKeyBase58));
     const mintPublicKey = new PublicKey(JIET_TOKEN_MINT);
@@ -86,15 +90,15 @@ serve(async (req) => {
     const transaction = new Transaction();
     try {
       await getAccount(connection, recipientTokenAccount);
-      console.log('Recipient token account exists');
+      console.log('✅ Recipient token account exists');
     } catch (error: any) {
       if (error?.message?.includes('could not find account')) {
-        console.log('Creating recipient token account...');
+        console.log('🔨 Creating recipient token account...');
         transaction.add(
           createAssociatedTokenAccountInstruction(
-            senderKeypair.publicKey, // payer
+            senderKeypair.publicKey,
             recipientTokenAccount,
-            recipientPublicKey, // owner
+            recipientPublicKey,
             mintPublicKey
           )
         );
@@ -103,10 +107,8 @@ serve(async (req) => {
       }
     }
 
-    // Assuming TOKEN_DECIMALS
-    const amount = BigInt(Math.floor(QUIZ_REWARD_AMOUNT * Math.pow(10, TOKEN_DECIMALS)));
+    const amount = BigInt(Math.floor(LAB_REWARD_AMOUNT * Math.pow(10, TOKEN_DECIMALS)));
 
-    // Add transfer instruction
     transaction.add(
       createTransferInstruction(
         senderTokenAccount,
@@ -125,32 +127,36 @@ serve(async (req) => {
     const signature = await connection.sendTransaction(transaction, [senderKeypair]);
     await connection.confirmTransaction(signature);
 
-    // 6. Mark as claimed in database
-    const { error: updateError } = await supabase
-      .from('quiz_completions')
+    console.log(`🎉 Transaction successful: ${signature}`);
+
+    // 6. Save to database
+    const { error: upsertError } = await supabase
+      .from('lab_completions')
       .upsert({
         user_id: user.id,
-        quiz_id: quizId,
-        score: score,
+        lab_id: 1, // Will be updated based on task
+        task_id: taskId,
         jiet_rewarded: true,
-        jiet_amount: QUIZ_REWARD_AMOUNT,
+        jiet_amount: LAB_REWARD_AMOUNT,
         wallet_address: walletAddress,
         transaction_signature: signature
-      }, { onConflict: ['user_id', 'quiz_id'] });
+      }, { onConflict: 'user_id,task_id' });
 
-    if (updateError) throw updateError;
+    if (upsertError) throw upsertError;
+
+    console.log('✅ Reward recorded in database');
 
     // 7. Return success
     return new Response(JSON.stringify({ 
       success: true, 
-      amount: QUIZ_REWARD_AMOUNT, 
+      amount: LAB_REWARD_AMOUNT, 
       signature 
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
   } catch (error: any) {
-    console.error('Error claiming single reward:', error);
+    console.error('❌ Error claiming lab reward:', error);
     return new Response(
       JSON.stringify({ success: false, error: error?.message || 'Unknown error occurred' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
