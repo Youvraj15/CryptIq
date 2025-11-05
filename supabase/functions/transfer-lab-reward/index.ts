@@ -8,7 +8,7 @@ import {
   createAssociatedTokenAccountInstruction,
   getAccount
 } from "https://esm.sh/@solana/spl-token@0.4.14";
-import { decode } from "https://deno.land/std@0.224.0/encoding/base58.ts";
+import bs58 from "https://esm.sh/bs58@5.0.0";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -79,7 +79,7 @@ serve(async (req) => {
     // 5. Send Solana transaction
     console.log('💰 Sending JIET tokens...');
     const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
-    const senderKeypair = Keypair.fromSecretKey(decode(privateKeyBase58));
+    const senderKeypair = Keypair.fromSecretKey(bs58.decode(privateKeyBase58));
     const mintPublicKey = new PublicKey(JIET_TOKEN_MINT);
     const recipientPublicKey = new PublicKey(walletAddress);
 
