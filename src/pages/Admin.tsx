@@ -577,9 +577,19 @@ const QuizEditDialog = ({ open, onOpenChange, quiz, onSave }: {
         if (error) throw error;
         toast({ title: 'Success', description: 'Quiz updated successfully.' });
       } else {
+        // Get the next available ID
+        const { data: maxIdData } = await supabaseDb
+          .from('quizzes')
+          .select('id')
+          .order('id', { ascending: false })
+          .limit(1)
+          .single();
+        
+        const nextId = maxIdData ? maxIdData.id + 1 : 1;
+        
         const { data, error } = await supabaseDb
           .from('quizzes')
-          .insert(values)
+          .insert({ ...values, id: nextId })
           .select('id')
           .single();
           
