@@ -53,16 +53,17 @@ serve(async (req) => {
     console.log(`✅ Processing lab reward for user ${user.id}, task ${taskId}`);
 
     // 4. Check if already rewarded
-    const { data: existingCompletion, error: selectError } = await supabase
+    const { data: existingCompletions, error: selectError } = await supabase
       .from('lab_completions')
       .select('*')
       .eq('user_id', user.id)
-      .eq('task_id', taskId)
-      .maybeSingle();
+      .eq('task_id', taskId);
 
-    if (selectError && selectError.code !== 'PGRST116') {
+    if (selectError) {
       throw selectError;
     }
+
+    const existingCompletion = existingCompletions && existingCompletions.length > 0 ? existingCompletions[0] : null;
 
     if (existingCompletion && existingCompletion.jiet_rewarded) {
       console.log('⚠️ Reward already claimed');

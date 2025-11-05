@@ -52,14 +52,17 @@ serve(async (req) => {
     }
 
     // 4. Check for existing completion and rules
-    const { data: existingCompletion, error: selectError } = await supabase
+    const { data: existingCompletions, error: selectError } = await supabase
       .from('quiz_completions')
-      .maybeSingle(); // Return null if no record
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('quiz_id', quizId);
 
-    if (selectError && selectError.code !== 'PGRST116') {
-      // PGRST116 means "no rows found", which is fine. Other errors are not.
+    if (selectError) {
       throw selectError;
     }
+
+    const existingCompletion = existingCompletions && existingCompletions.length > 0 ? existingCompletions[0] : null;
 
     if (score < MIN_SCORE_TO_CLAIM) {
       return new Response(JSON.stringify({ success: false, error: "Score is too low to claim." }), {
