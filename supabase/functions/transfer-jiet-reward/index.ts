@@ -77,37 +77,61 @@ serve(async (req) => {
     }
     
     // 5. Send Solana transaction
+    console.log('💰 Initiating token transfer...');
     const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
     const senderKeypair = Keypair.fromSecretKey(bs58.decode(privateKeyBase58));
     const mintPublicKey = new PublicKey(JIET_TOKEN_MINT);
     const recipientPublicKey = new PublicKey(walletAddress);
 
+    console.log('🔑 Sender wallet:', senderKeypair.publicKey.toString());
+    console.log('📮 Recipient wallet:', recipientPublicKey.toString());
+
     const senderTokenAccount = await getAssociatedTokenAddress(mintPublicKey, senderKeypair.publicKey);
     const recipientTokenAccount = await getAssociatedTokenAddress(mintPublicKey, recipientPublicKey);
 
+    console.log('🏦 Sender token account:', senderTokenAccount.toString());
+    console.log('🏦 Recipient token account:', recipientTokenAccount.toString());
+
+    // Verify sender has the token account and sufficient balance
+    try {
+      const senderAccount = await getAccount(connection, senderTokenAccount);
+      console.log('✅ Sender token balance:', Number(senderAccount.amount) / Math.pow(10, TOKEN_DECIMALS));
+      
+      const requiredAmount = BigInt(Math.floor(QUIZ_REWARD_AMOUNT * Math.pow(10, TOKEN_DECIMALS)));
+      if (senderAccount.amount < requiredAmount) {
+        throw new Error(`Insufficient balance. Required: ${QUIZ_REWARD_AMOUNT}, Available: ${Number(senderAccount.amount) / Math.pow(10, TOKEN_DECIMALS)}`);
+      }
+    } catch (error: any) {
+      console.error('❌ Sender token account error:', error.message);
+      throw new Error(`Server wallet not configured properly: ${error.message}`);
+    }
+
     // Check if recipient token account exists, create if not
     const transaction = new Transaction();
+    let needsTokenAccount = false;
     try {
       await getAccount(connection, recipientTokenAccount);
-      console.log('Recipient token account exists');
+      console.log('✅ Recipient token account exists');
     } catch (error: any) {
-      if (error?.message?.includes('could not find account')) {
-        console.log('Creating recipient token account...');
+      if (error?.message?.includes('could not find account') || error?.name === 'TokenAccountNotFoundError') {
+        console.log('🔨 Creating recipient token account...');
+        needsTokenAccount = true;
         transaction.add(
           createAssociatedTokenAccountInstruction(
-            senderKeypair.publicKey, // payer
+            senderKeypair.publicKey,
             recipientTokenAccount,
-            recipientPublicKey, // owner
+            recipientPublicKey,
             mintPublicKey
           )
         );
       } else {
+        console.error('❌ Error checking recipient account:', error);
         throw error;
       }
     }
 
-    // Assuming TOKEN_DECIMALS
     const amount = BigInt(Math.floor(QUIZ_REWARD_AMOUNT * Math.pow(10, TOKEN_DECIMALS)));
+    console.log(`💸 Transferring ${QUIZ_REWARD_AMOUNT} JIET tokens (${amount.toString()} raw)`);
 
     // Add transfer instruction
     transaction.add(
@@ -121,12 +145,20 @@ serve(async (req) => {
       )
     );
     
-    const { blockhash } = await connection.getLatestBlockhash();
+    console.log('📝 Getting latest blockhash...');
+    const { blockhash } = await connection.getLatestBlockhash('confirmed');
     transaction.recentBlockhash = blockhash;
     transaction.feePayer = senderKeypair.publicKey;
     
-    const signature = await connection.sendTransaction(transaction, [senderKeypair]);
-    await connection.confirmTransaction(signature);
+    console.log('📤 Sending transaction...');
+    const signature = await connection.sendTransaction(transaction, [senderKeypair], {
+      skipPreflight: false,
+      preflightCommitment: 'confirmed'
+    });
+    
+    console.log('⏳ Confirming transaction...');
+    await connection.confirmTransaction(signature, 'confirmed');
+    console.log(`🎉 Transaction confirmed: ${signature}`);
 
     // 6. Mark as claimed in database
     const { error: updateError } = await supabase
