@@ -4,7 +4,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { Connection, Keypair, PublicKey, Transaction } from "https://esm.sh/@solana/web3.js@1.98.0";
 import { 
-  TOKEN_PROGRAM_ID, 
+  TOKEN_PROGRAM_ID,
+  TOKEN_2022_PROGRAM_ID,
   createTransferInstruction, 
   getAssociatedTokenAddress,
   createAssociatedTokenAccountInstruction,
@@ -86,15 +87,19 @@ serve(async (req) => {
     console.log('🔑 Sender wallet:', senderKeypair.publicKey.toString());
     console.log('📮 Recipient wallet:', recipientPublicKey.toString());
 
-    const senderTokenAccount = await getAssociatedTokenAddress(mintPublicKey, senderKeypair.publicKey);
-    const recipientTokenAccount = await getAssociatedTokenAddress(mintPublicKey, recipientPublicKey);
+    // Detect token program (Token-2022 vs Legacy)
+    const mintInfo = await connection.getAccountInfo(mintPublicKey);
+    const tokenProgramId = mintInfo?.owner?.toString() === TOKEN_2022_PROGRAM_ID.toString() ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID;
+
+    const senderTokenAccount = await getAssociatedTokenAddress(mintPublicKey, senderKeypair.publicKey, false, tokenProgramId);
+    const recipientTokenAccount = await getAssociatedTokenAddress(mintPublicKey, recipientPublicKey, false, tokenProgramId);
 
     console.log('🏦 Sender token account:', senderTokenAccount.toString());
     console.log('🏦 Recipient token account:', recipientTokenAccount.toString());
 
     // Verify sender has the token account and sufficient balance
     try {
-      const senderAccount = await getAccount(connection, senderTokenAccount);
+      const senderAccount = await getAccount(connection, senderTokenAccount, 'confirmed', tokenProgramId);
       console.log('✅ Sender token balance:', Number(senderAccount.amount) / Math.pow(10, TOKEN_DECIMALS));
       
       const requiredAmount = BigInt(Math.floor(QUIZ_REWARD_AMOUNT * Math.pow(10, TOKEN_DECIMALS)));
@@ -110,7 +115,7 @@ serve(async (req) => {
     const transaction = new Transaction();
     let needsTokenAccount = false;
     try {
-      await getAccount(connection, recipientTokenAccount);
+      await getAccount(connection, recipientTokenAccount, 'confirmed', tokenProgramId);
       console.log('✅ Recipient token account exists');
     } catch (error: any) {
       if (error?.message?.includes('could not find account') || error?.name === 'TokenAccountNotFoundError') {
@@ -121,7 +126,8 @@ serve(async (req) => {
             senderKeypair.publicKey,
             recipientTokenAccount,
             recipientPublicKey,
-            mintPublicKey
+            mintPublicKey,
+            tokenProgramId
           )
         );
       } else {
@@ -141,7 +147,7 @@ serve(async (req) => {
         senderKeypair.publicKey,
         amount,
         [],
-        TOKEN_PROGRAM_ID
+        tokenProgramId
       )
     );
     
