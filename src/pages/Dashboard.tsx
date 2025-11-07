@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Trophy, Flame, BookOpen, FlaskConical, Gift, TrendingUp, Target, Award, Upload, Camera, Pencil } from 'lucide-react';
+import { Trophy, Flame, BookOpen, FlaskConical, Gift, TrendingUp, Target, Award, Upload, Camera, Pencil, Wallet } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { supabase } from '@/integrations/supabase/client';
 import { supabaseDb } from '@/lib/supabase-types';
@@ -9,6 +9,8 @@ import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { NameEditDialog } from '@/components/NameEditDialog';
+import { useWallet } from '@solana/wallet-adapter-react';
+import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 
 interface UserStats {
   total_xp: number;
@@ -36,6 +38,7 @@ interface Profile {
 
 const Dashboard = () => {
   const { user } = useAuth();
+  const { publicKey, connected } = useWallet();
   const [stats, setStats] = useState<UserStats>({
     total_xp: 0,
     current_streak: 0,
@@ -52,6 +55,8 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [jietBalance, setJietBalance] = useState(0);
+  const [unclaimedRewards, setUnclaimedRewards] = useState(0);
+  const [isClaiming, setIsClaiming] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
   // Fetch user stats and profile
@@ -97,19 +102,40 @@ const Dashboard = () => {
           setStats(statsData as any);
         }
 
-        // Fetch JIET balance from quiz completions
+        // Fetch JIET balance from quiz and lab completions
         const { data: quizCompletions } = await supabase
           .from('quiz_completions')
-          .select('jiet_amount')
+          .select('jiet_amount, jiet_rewarded')
           .eq('user_id', user.id);
 
+        const { data: labCompletions } = await supabase
+          .from('lab_completions')
+          .select('jiet_amount, jiet_rewarded')
+          .eq('user_id', user.id);
+
+        let totalJiet = 0;
+        let totalUnclaimed = 0;
+
         if (quizCompletions) {
-          const totalJiet = quizCompletions.reduce(
-            (sum, completion) => sum + (completion.jiet_amount || 0),
-            0
-          );
-          setJietBalance(totalJiet);
+          quizCompletions.forEach(completion => {
+            totalJiet += (completion.jiet_amount || 0);
+            if (!completion.jiet_rewarded) {
+              totalUnclaimed += (completion.jiet_amount || 0);
+            }
+          });
         }
+
+        if (labCompletions) {
+          labCompletions.forEach(completion => {
+            totalJiet += (completion.jiet_amount || 0);
+            if (!completion.jiet_rewarded) {
+              totalUnclaimed += (completion.jiet_amount || 0);
+            }
+          });
+        }
+
+        setJietBalance(totalJiet);
+        setUnclaimedRewards(totalUnclaimed);
 
       } catch (error) {
         console.error('Error fetching user data:', error);
@@ -163,9 +189,111 @@ const Dashboard = () => {
       )
       .subscribe();
 
+    // Set up real-time subscription for quiz completions
+    const quizChannel = supabase
+      .channel('quiz_completions_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'quiz_completions',
+          filter: `user_id=eq.${user.id}`,
+        },
+        async () => {
+          // Re-fetch JIET balance when quiz completions change
+          const { data: quizData } = await supabase
+            .from('quiz_completions')
+            .select('jiet_amount, jiet_rewarded')
+            .eq('user_id', user.id);
+
+          const { data: labData } = await supabase
+            .from('lab_completions')
+            .select('jiet_amount, jiet_rewarded')
+            .eq('user_id', user.id);
+
+          let totalJiet = 0;
+          let totalUnclaimed = 0;
+
+          if (quizData) {
+            quizData.forEach(completion => {
+              totalJiet += (completion.jiet_amount || 0);
+              if (!completion.jiet_rewarded) {
+                totalUnclaimed += (completion.jiet_amount || 0);
+              }
+            });
+          }
+
+          if (labData) {
+            labData.forEach(completion => {
+              totalJiet += (completion.jiet_amount || 0);
+              if (!completion.jiet_rewarded) {
+                totalUnclaimed += (completion.jiet_amount || 0);
+              }
+            });
+          }
+
+          setJietBalance(totalJiet);
+          setUnclaimedRewards(totalUnclaimed);
+        }
+      )
+      .subscribe();
+
+    // Set up real-time subscription for lab completions
+    const labChannel = supabase
+      .channel('lab_completions_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'lab_completions',
+          filter: `user_id=eq.${user.id}`,
+        },
+        async () => {
+          // Re-fetch JIET balance when lab completions change
+          const { data: quizData } = await supabase
+            .from('quiz_completions')
+            .select('jiet_amount, jiet_rewarded')
+            .eq('user_id', user.id);
+
+          const { data: labData } = await supabase
+            .from('lab_completions')
+            .select('jiet_amount, jiet_rewarded')
+            .eq('user_id', user.id);
+
+          let totalJiet = 0;
+          let totalUnclaimed = 0;
+
+          if (quizData) {
+            quizData.forEach(completion => {
+              totalJiet += (completion.jiet_amount || 0);
+              if (!completion.jiet_rewarded) {
+                totalUnclaimed += (completion.jiet_amount || 0);
+              }
+            });
+          }
+
+          if (labData) {
+            labData.forEach(completion => {
+              totalJiet += (completion.jiet_amount || 0);
+              if (!completion.jiet_rewarded) {
+                totalUnclaimed += (completion.jiet_amount || 0);
+              }
+            });
+          }
+
+          setJietBalance(totalJiet);
+          setUnclaimedRewards(totalUnclaimed);
+        }
+      )
+      .subscribe();
+
     return () => {
       supabase.removeChannel(statsChannel);
       supabase.removeChannel(profileChannel);
+      supabase.removeChannel(quizChannel);
+      supabase.removeChannel(labChannel);
     };
   }, [user]);
 
@@ -281,6 +409,85 @@ useEffect(() => {
     };
   }
 }, [user]);
+
+  const handleClaimRewards = async () => {
+    if (!publicKey || !connected) {
+      toast.error('Please connect your Solana wallet first');
+      return;
+    }
+
+    if (unclaimedRewards <= 0) {
+      toast.error('No rewards to claim');
+      return;
+    }
+
+    setIsClaiming(true);
+    try {
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !sessionData.session) {
+        throw new Error('You are not authenticated.');
+      }
+      const token = sessionData.session.access_token;
+
+      const { data, error } = await supabase.functions.invoke('claim-pending-rewards', {
+        body: JSON.stringify({
+          walletAddress: publicKey.toString(),
+        }),
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (error) throw error;
+      if (data.error) throw new Error(data.error);
+
+      toast.success(`Successfully claimed ${data.totalClaimed} JIET tokens! 🎉`, {
+        description: `Transaction: ${data.signature.slice(0, 10)}...`,
+      });
+
+      // Refresh the data
+      const { data: quizData } = await supabase
+        .from('quiz_completions')
+        .select('jiet_amount, jiet_rewarded')
+        .eq('user_id', user!.id);
+
+      const { data: labData } = await supabase
+        .from('lab_completions')
+        .select('jiet_amount, jiet_rewarded')
+        .eq('user_id', user!.id);
+
+      let totalJiet = 0;
+      let totalUnclaimed = 0;
+
+      if (quizData) {
+        quizData.forEach(completion => {
+          totalJiet += (completion.jiet_amount || 0);
+          if (!completion.jiet_rewarded) {
+            totalUnclaimed += (completion.jiet_amount || 0);
+          }
+        });
+      }
+
+      if (labData) {
+        labData.forEach(completion => {
+          totalJiet += (completion.jiet_amount || 0);
+          if (!completion.jiet_rewarded) {
+            totalUnclaimed += (completion.jiet_amount || 0);
+          }
+        });
+      }
+
+      setJietBalance(totalJiet);
+      setUnclaimedRewards(totalUnclaimed);
+    } catch (error: any) {
+      console.error('❌ Claim error:', error);
+      toast.error('Failed to claim rewards', {
+        description: error.message || 'Unknown error occurred',
+      });
+    } finally {
+      setIsClaiming(false);
+    }
+  };
 
   const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     try {
@@ -501,6 +708,44 @@ useEffect(() => {
               </Card>
             ))}
           </div>
+
+          {/* Claim Rewards Section */}
+          {unclaimedRewards > 0 && (
+            <Card className="border-2 border-accent/50 bg-gradient-to-br from-accent/5 to-primary/5">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-accent/20 to-primary/20 flex items-center justify-center">
+                      <Gift className="w-7 h-7 text-accent" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-foreground mb-1">
+                        Unclaimed Rewards
+                      </h3>
+                      <p className="text-sm text-muted-foreground">
+                        You have <span className="font-semibold text-accent">{unclaimedRewards.toFixed(1)} JIET</span> waiting to be claimed
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    {!connected ? (
+                      <WalletMultiButton className="!bg-gradient-to-r !from-accent !to-primary !h-11 !px-6 !rounded-lg !font-semibold" />
+                    ) : (
+                      <Button
+                        size="lg"
+                        onClick={handleClaimRewards}
+                        disabled={isClaiming}
+                        className="gap-2"
+                      >
+                        <Wallet className="w-5 h-5" />
+                        {isClaiming ? 'Claiming...' : 'Claim Rewards'}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         {/* Right Column - Leaderboard */}
