@@ -114,6 +114,8 @@ const Rewards = () => {
   );
   const [rewardsLoading, setRewardsLoading] = useState(true);
   const [isRedeeming, setIsRedeeming] = useState(false);
+  const [unclaimedRewards, setUnclaimedRewards] = useState(0);
+  const [isClaiming, setIsClaiming] = useState(false);
 
   // Fetch redeemable rewards from Supabase
   useEffect(() => {
@@ -143,6 +145,78 @@ const Rewards = () => {
     };
     fetchRewards();
   }, [toast]);
+
+  // Fetch unclaimed rewards
+  useEffect(() => {
+    if (!user) return;
+
+    const fetchUnclaimedRewards = async () => {
+      try {
+        const { data: quizCompletions } = await supabase
+          .from('quiz_completions')
+          .select('jiet_amount, jiet_rewarded')
+          .eq('user_id', user.id);
+
+        const { data: labCompletions } = await supabase
+          .from('lab_completions')
+          .select('jiet_amount, jiet_rewarded')
+          .eq('user_id', user.id);
+
+        let totalUnclaimed = 0;
+
+        if (quizCompletions) {
+          quizCompletions.forEach(completion => {
+            if (!completion.jiet_rewarded) {
+              totalUnclaimed += (completion.jiet_amount || 0);
+            }
+          });
+        }
+
+        if (labCompletions) {
+          labCompletions.forEach(completion => {
+            if (!completion.jiet_rewarded) {
+              totalUnclaimed += (completion.jiet_amount || 0);
+            }
+          });
+        }
+
+        setUnclaimedRewards(totalUnclaimed);
+      } catch (error) {
+        console.error('Error fetching unclaimed rewards:', error);
+      }
+    };
+
+    fetchUnclaimedRewards();
+
+    // Set up realtime subscription
+    const channel = supabase
+      .channel('unclaimed_rewards_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'quiz_completions',
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => fetchUnclaimedRewards()
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'lab_completions',
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => fetchUnclaimedRewards()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user]);
 
   // Dynamically calculate achievements based on user progress
   const achievements = useMemo(() => {
@@ -291,6 +365,93 @@ const Rewards = () => {
     }
   };
 
+  // Handle claiming pending rewards
+  const handleClaimRewards = async () => {
+    if (!publicKey || !connected) {
+      toast({
+        title: 'Wallet not connected',
+        description: 'Please connect your Solana wallet first',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (unclaimedRewards <= 0) {
+      toast({
+        title: 'No rewards to claim',
+        description: 'Complete quizzes and labs to earn JIET tokens',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsClaiming(true);
+    try {
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !sessionData.session) {
+        throw new Error('You are not authenticated.');
+      }
+      const token = sessionData.session.access_token;
+
+      const { data, error } = await supabase.functions.invoke('claim-pending-rewards', {
+        body: JSON.stringify({
+          walletAddress: publicKey.toString(),
+        }),
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (error) throw error;
+      if (data.error) throw new Error(data.error);
+
+      toast({
+        title: 'Success! 🎉',
+        description: `Claimed ${data.totalClaimed} JIET tokens! Tx: ${data.signature.slice(0, 10)}...`,
+      });
+
+      // Refresh unclaimed rewards
+      const { data: quizData } = await supabase
+        .from('quiz_completions')
+        .select('jiet_amount, jiet_rewarded')
+        .eq('user_id', user!.id);
+
+      const { data: labData } = await supabase
+        .from('lab_completions')
+        .select('jiet_amount, jiet_rewarded')
+        .eq('user_id', user!.id);
+
+      let totalUnclaimed = 0;
+
+      if (quizData) {
+        quizData.forEach(completion => {
+          if (!completion.jiet_rewarded) {
+            totalUnclaimed += (completion.jiet_amount || 0);
+          }
+        });
+      }
+
+      if (labData) {
+        labData.forEach(completion => {
+          if (!completion.jiet_rewarded) {
+            totalUnclaimed += (completion.jiet_amount || 0);
+          }
+        });
+      }
+
+      setUnclaimedRewards(totalUnclaimed);
+    } catch (error: any) {
+      console.error('❌ Claim error:', error);
+      toast({
+        title: 'Claim failed',
+        description: error.message || 'Unknown error occurred',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsClaiming(false);
+    }
+  };
+
   const nextMilestone = 500;
   const progressToNext = (jietBalance / nextMilestone) * 100;
 
@@ -359,6 +520,44 @@ const Rewards = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Claim Rewards Section */}
+      {unclaimedRewards > 0 && (
+        <Card className="border-2 border-accent/50 bg-gradient-to-br from-accent/5 to-primary/5">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-accent/20 to-primary/20 flex items-center justify-center">
+                  <Gift className="w-7 h-7 text-accent" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-foreground mb-1">
+                    Unclaimed Rewards
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    You have <span className="font-semibold text-accent">{unclaimedRewards.toFixed(1)} JIET</span> waiting to be claimed
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-col gap-2">
+                {!connected ? (
+                  <WalletMultiButton className="!bg-gradient-to-r !from-accent !to-primary !h-11 !px-6 !rounded-lg !font-semibold" />
+                ) : (
+                  <Button
+                    size="lg"
+                    onClick={handleClaimRewards}
+                    disabled={isClaiming}
+                    className="gap-2"
+                  >
+                    <Wallet className="w-5 h-5" />
+                    {isClaiming ? 'Claiming...' : 'Claim Rewards'}
+                  </Button>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* JIET Token Balance */}
       <Card className="border-2 overflow-hidden">
