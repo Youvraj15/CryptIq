@@ -167,9 +167,24 @@ serve(async (req) => {
     });
     console.log(`📝 Transaction signature: ${signature}`);
     
-    console.log('⏳ Confirming transaction...');
-    await connection.confirmTransaction(signature, 'confirmed');
-    console.log('✅ Transaction confirmed!');
+    console.log('⏳ Confirming transaction (polling)...');
+    // Poll for confirmation to avoid WebSocket usage in Edge runtime
+    const start = Date.now();
+    const timeoutMs = 60000; // 60s
+    let confirmed = false;
+    while (Date.now() - start < timeoutMs) {
+      const statusResp = await connection.getSignatureStatuses([signature]);
+      const status = statusResp.value[0];
+      if (status?.confirmationStatus === 'confirmed' || status?.confirmationStatus === 'finalized') {
+        confirmed = true;
+        break;
+      }
+      await new Promise((res) => setTimeout(res, 1500));
+    }
+    if (!confirmed) {
+      throw new Error('Transaction confirmation timed out');
+    }
+    console.log('✅ Transaction confirmed!')
 
     // 4. Mark all as claimed
     if (quizCompletionIds.length > 0) {
