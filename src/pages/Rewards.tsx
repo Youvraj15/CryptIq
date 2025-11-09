@@ -407,7 +407,7 @@ const Rewards = () => {
 
       toast({
         title: 'Success! 🎉',
-        description: `Claimed ${data.totalClaimed} JIET tokens! Tx: ${data.signature.slice(0, 10)}...`,
+        description: `Claimed ${data.totalClaimed ?? data.amount} JIET tokens! View on Solscan: https://solscan.io/tx/${data.signature}?cluster=devnet`,
       });
 
       // Refresh unclaimed rewards
@@ -518,6 +518,9 @@ const Rewards = () => {
               )}
             </div>
           </div>
+          <p className="mt-4 text-xs text-muted-foreground">
+            Note: We use Solana Devnet. Switch your wallet network to Devnet to view JIET tokens. You can verify transfers on Solscan (Devnet).
+          </p>
         </CardContent>
       </Card>
 
