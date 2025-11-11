@@ -12,6 +12,7 @@ interface AuthContextType {
   signUp: (email: string, password: string, fullName?: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
   forgotPassword: (email: string) => Promise<{ error: any }>;
+  signInWithGoogle: () => Promise<{ error: any; }>; // <-- Add this
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -149,6 +150,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // --- New Function ---
+  const signInWithGoogle = async () => {
+    console.log('Attempting Google sign in');
+    try {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/dashboard` // Optional: specify redirect
+        }
+      });
+      
+      console.log('Google sign in result:', { data, error });
+
+      if (error) {
+        toast.error(error.message);
+        return { error };
+      }
+      
+      return { error: null };
+    } catch (err) {
+      console.error('Google sign in error:', err);
+      toast.error('An unexpected error occurred');
+      return { error: err };
+    }
+  };
+  // --------------------
+
   const value: AuthContextType = {
     user,
     session,
@@ -157,6 +185,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signUp,
     signOut,
     forgotPassword,
+    signInWithGoogle, // <-- Add this
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
