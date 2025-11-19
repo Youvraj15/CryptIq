@@ -42,42 +42,43 @@ export default function DashboardLayout() {
         <div className="flex min-h-screen w-full">
           <AppSidebar />
           <main className="flex-1">
-            <header className="h-16 flex items-center justify-between border-b border-border px-6">
+            <header className="h-14 sm:h-16 flex items-center justify-between border-b border-border px-3 sm:px-6">
               <SidebarTrigger />
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <User className="w-4 h-4" />
-                  <span>{username}</span>
+              <div className="flex items-center gap-2 sm:gap-4">
+                <div className="hidden md:flex items-center gap-2 text-xs sm:text-sm text-muted-foreground">
+                  <User className="w-3 h-3 sm:w-4 sm:h-4" />
+                  <span className="truncate max-w-[100px] sm:max-w-none">{username}</span>
                 </div>
                 {connected && (
                   <>
-                    <div className="flex items-center gap-2 px-3 py-1.5 bg-accent/10 rounded-lg border border-accent/20">
-                      <Coins className="w-4 h-4 text-accent" />
-                      <span className="text-sm font-semibold text-accent">{jietBalance.toFixed(2)} JIET</span>
+                    <div className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 bg-accent/10 rounded-lg border border-accent/20">
+                      <Coins className="w-3 h-3 sm:w-4 sm:h-4 text-accent" />
+                      <span className="text-xs sm:text-sm font-semibold text-accent">{jietBalance.toFixed(2)}</span>
+                      <span className="hidden sm:inline text-xs sm:text-sm font-semibold text-accent">JIET</span>
                     </div>
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={disconnect}
-                      className="gap-2"
+                      className="gap-1 sm:gap-2 h-8 sm:h-9 px-2 sm:px-3"
                       title="Disconnect Wallet"
                     >
-                      <Unplug className="w-4 h-4" />
-                      <span className="hidden sm:inline">Disconnect</span>
+                      <Unplug className="w-3 h-3 sm:w-4 sm:h-4" />
+                      <span className="hidden lg:inline text-xs sm:text-sm">Disconnect</span>
                     </Button>
                   </>
                 )}
                 <Button
                   size="sm"
                   onClick={signOut}
-                  className="flex items-center gap-2 bg-accent hover:bg-accent/90 text-accent-foreground"
+                  className="flex items-center gap-1 sm:gap-2 bg-accent hover:bg-accent/90 text-accent-foreground h-8 sm:h-9 px-2 sm:px-3"
                 >
-                  <LogOut className="w-4 h-4" />
-                  Sign Out
+                  <LogOut className="w-3 h-3 sm:w-4 sm:h-4" />
+                  <span className="hidden sm:inline text-xs sm:text-sm">Sign Out</span>
                 </Button>
               </div>
             </header>
-            <div className="p-6">
+            <div className="p-3 sm:p-4 md:p-6">
               <Outlet />
             </div>
           </main>
