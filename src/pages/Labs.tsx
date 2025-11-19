@@ -197,7 +197,7 @@ const Labs = () => {
 
       toast({
         title: 'Success! 🎉',
-        description: `Claimed ${data.totalClaimed ?? data.amount} JIET tokens! View on Solscan: https://solscan.io/tx/${data.signature}?cluster=devnet`,
+        description: `Claimed ${data.totalClaimed ?? data.amount} JIET tokens! `,
       });
 
       setUnclaimedRewards(0);

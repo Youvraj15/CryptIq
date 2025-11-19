@@ -143,7 +143,7 @@ serve(async (req) => {
     }
 
     // Assuming 6 decimals
-    const amount = BigInt(Math.floor(totalToClaim * 1_000_000));
+    const amount = BigInt(Math.floor(totalToClaim * 1_000_000000));
     console.log(`💸 Transferring ${totalToClaim} JIET (${amount.toString()} smallest units)`);
 
     transaction.add(
