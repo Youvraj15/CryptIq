@@ -41,6 +41,8 @@ const Quiz = () => {
   const [quizScores, setQuizScores] = useState<Record<number, number>>({});
   const [rewardedQuizzes, setRewardedQuizzes] = useState<Set<number>>(new Set());
   const [isClaimingReward, setIsClaimingReward] = useState(false);
+  const [unclaimedRewards, setUnclaimedRewards] = useState(0);
+  const [isClaiming, setIsClaiming] = useState(false);
   const { toast } = useToast();
   const { publicKey, connected } = useWallet();
   const { user } = useAuth();
@@ -107,6 +109,51 @@ const Quiz = () => {
     };
 
     loadCompletions();
+  }, [user]);
+
+  // Fetch and listen for unclaimed rewards
+  useEffect(() => {
+    if (!user) return;
+
+    const fetchUnclaimedRewards = async () => {
+      const { data, error } = await supabaseDb
+        .from('quiz_completions')
+        .select('jiet_amount')
+        .eq('user_id', user.id)
+        .eq('jiet_rewarded', false)
+        .gt('jiet_amount', 0);
+
+      if (error) {
+        console.error('Error fetching unclaimed rewards:', error);
+        return;
+      }
+
+      const total = data.reduce((sum, item) => sum + (Number(item.jiet_amount) || 0), 0);
+      setUnclaimedRewards(total);
+    };
+
+    fetchUnclaimedRewards();
+
+    // Subscribe to real-time updates
+    const channel = supabase
+      .channel('quiz_completions_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'quiz_completions',
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => {
+          fetchUnclaimedRewards();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [user]);
 
   const getDifficultyColor = (difficulty: string) => {
@@ -288,6 +335,76 @@ const handleClaimReward = async (quizId: number, score: number) => {
 };
 // --- END of REWRITTEN `handleClaimReward` ---
 
+  // Claim all pending rewards
+  const handleClaimAllRewards = async () => {
+    if (!connected || !publicKey) {
+      toast({
+        title: 'Wallet Not Connected',
+        description: 'Please connect your Solana wallet first.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (unclaimedRewards <= 0) {
+      toast({
+        title: 'No Rewards',
+        description: 'You have no pending rewards to claim.',
+      });
+      return;
+    }
+
+    setIsClaiming(true);
+
+    try {
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !sessionData.session) {
+        throw new Error('Authentication required');
+      }
+
+      const { data, error } = await supabase.functions.invoke('claim-pending-rewards', {
+        body: { walletAddress: publicKey.toString() },
+        headers: {
+          Authorization: `Bearer ${sessionData.session.access_token}`,
+        },
+      });
+
+      if (error) throw error;
+
+      if (data.success) {
+        toast({
+          title: 'Success! 🎉',
+          description: `Claimed ${data.totalClaimed ?? data.amount} JIET tokens! View on Solscan: https://solscan.io/tx/${data.signature}?cluster=devnet`,
+        });
+        setUnclaimedRewards(0);
+        
+        // Refresh rewarded quizzes
+        const { data: completions } = await supabase
+          .from('quiz_completions')
+          .select('*')
+          .eq('user_id', user!.id);
+
+        if (completions) {
+          const rewarded = new Set<number>();
+          completions.forEach((completion: any) => {
+            if (completion.jiet_rewarded) {
+              rewarded.add(completion.quiz_id);
+            }
+          });
+          setRewardedQuizzes(rewarded);
+        }
+      }
+    } catch (err: any) {
+      console.error('Claim error:', err);
+      toast({
+        title: 'Claim Failed',
+        description: err.message || 'Failed to claim rewards',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsClaiming(false);
+    }
+  };
 
   // Fetches questions from DB and opens modal
   const handleStartQuiz = async (quizId: number, locked: boolean) => {
@@ -380,6 +497,40 @@ const handleClaimReward = async (quizId: number, score: number) => {
                 </p>
               </div>
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Claim Rewards Section */}
+      {connected && unclaimedRewards > 0 && (
+        <Card className="border-2 border-primary/50 bg-gradient-to-br from-primary/5 to-accent/5">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 rounded-xl bg-primary/20 flex items-center justify-center animate-pulse">
+                  <Coins className="w-7 h-7 text-primary" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-foreground mb-1">
+                    🎉 Unclaimed JIET Rewards Available!
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    You have <span className="font-bold text-primary">{unclaimedRewards} JIET</span> tokens ready to claim
+                  </p>
+                </div>
+              </div>
+              <Button
+                onClick={handleClaimAllRewards}
+                disabled={isClaiming}
+                size="lg"
+                className="font-bold whitespace-nowrap"
+              >
+                {isClaiming ? 'Claiming...' : `Claim ${unclaimedRewards} JIET`}
+              </Button>
+            </div>
+            <p className="mt-4 text-xs text-muted-foreground">
+              Note: We use Solana Devnet. Switch your wallet network to Devnet to view JIET tokens. You can verify transfers on Solscan (Devnet).
+            </p>
           </CardContent>
         </Card>
       )}
