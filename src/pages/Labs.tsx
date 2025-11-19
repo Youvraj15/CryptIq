@@ -65,6 +65,8 @@ const Labs = () => {
   const [completedTaskIds, setCompletedTaskIds] = useState<number[]>([]);
   const [rewardedTaskIds, setRewardedTaskIds] = useState<Set<number>>(new Set());
   const [isClaimingReward, setIsClaimingReward] = useState(false);
+  const [unclaimedRewards, setUnclaimedRewards] = useState(0);
+  const [isClaiming, setIsClaiming] = useState(false);
   
   const { toast } = useToast();
   const { publicKey, connected } = useWallet();
@@ -109,6 +111,107 @@ const Labs = () => {
     
     fetchAllData();
   }, [getCompletedTasks, toast]);
+
+  // Fetch unclaimed rewards
+  useEffect(() => {
+    const fetchUnclaimedRewards = async () => {
+      if (!user) return;
+
+      try {
+        const { data: labRewards, error: labError } = await supabase
+          .from('lab_completions')
+          .select('jiet_amount')
+          .eq('user_id', user.id)
+          .eq('jiet_rewarded', false);
+
+        if (labError) throw labError;
+
+        const totalLab = labRewards?.reduce((sum, r) => sum + Number(r.jiet_amount), 0) || 0;
+        setUnclaimedRewards(totalLab);
+      } catch (error) {
+        console.error('Error fetching unclaimed rewards:', error);
+      }
+    };
+
+    fetchUnclaimedRewards();
+
+    // Subscribe to real-time updates
+    const channel = supabase
+      .channel('lab-rewards-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'lab_completions',
+          filter: `user_id=eq.${user?.id}`
+        },
+        () => {
+          fetchUnclaimedRewards();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user]);
+
+  // Claim all pending rewards
+  const handleClaimAllRewards = async () => {
+    if (!connected || !publicKey) {
+      toast({
+        title: 'Wallet Not Connected',
+        description: 'Please connect your wallet to claim rewards.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (unclaimedRewards <= 0) {
+      toast({
+        title: 'No Rewards',
+        description: 'You have no unclaimed rewards.',
+      });
+      return;
+    }
+
+    setIsClaiming(true);
+
+    try {
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !sessionData.session) {
+        throw new Error('You must be logged in to claim rewards.');
+      }
+      const token = sessionData.session.access_token;
+
+      const { data, error } = await supabase.functions.invoke('claim-pending-rewards', {
+        body: { walletAddress: publicKey.toString() },
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: 'Success! 🎉',
+        description: `Claimed ${data.totalClaimed ?? data.amount} JIET tokens! View on Solscan: https://solscan.io/tx/${data.signature}?cluster=devnet`,
+      });
+
+      setUnclaimedRewards(0);
+    } catch (error: any) {
+      console.error('Error claiming rewards:', error);
+      toast({
+        title: 'Claim Failed',
+        description: error.message || 'Failed to claim rewards. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsClaiming(false);
+    }
+  };
 
   // Auto-claim JIET rewards for completing a lab task
   const handleClaimLabReward = async (taskId: number) => {
@@ -270,6 +373,40 @@ const Labs = () => {
                 </p>
               </div>
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Claim Rewards Section */}
+      {connected && unclaimedRewards > 0 && (
+        <Card className="border-2 border-primary/50 bg-primary/5">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center flex-shrink-0">
+                  <Coins className="w-6 h-6 text-primary" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-bold text-foreground mb-1">
+                    Unclaimed Rewards Available! 🎉
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    You have {unclaimedRewards} JIET tokens ready to claim
+                  </p>
+                </div>
+              </div>
+              <Button
+                onClick={handleClaimAllRewards}
+                disabled={isClaiming}
+                size="lg"
+                className="flex-shrink-0"
+              >
+                {isClaiming ? 'Claiming...' : 'Claim Rewards'}
+              </Button>
+            </div>
+            <p className="mt-4 text-xs text-muted-foreground">
+              Note: We use Solana Devnet. Switch your wallet network to Devnet to view JIET tokens. You can verify transfers on Solscan (Devnet).
+            </p>
           </CardContent>
         </Card>
       )}
