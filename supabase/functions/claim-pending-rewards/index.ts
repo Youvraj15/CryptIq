@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
-import { Connection, Keypair, PublicKey, Transaction } from "https://esm.sh/@solana/web3.js@1.87.6";
-import { TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, createTransferInstruction, getAssociatedTokenAddress, createAssociatedTokenAccountInstruction, getAccount } from "https://esm.sh/@solana/spl-token@0.3.11";
+import { Connection, Keypair, PublicKey, Transaction } from "https://esm.sh/@solana/web3.js@1.98.4";
+import { TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, createTransferInstruction, getAssociatedTokenAddress, createAssociatedTokenAccountInstruction, getAccount } from "https://esm.sh/@solana/spl-token@0.4.14";
 import bs58 from "https://esm.sh/bs58@5.0.0";
 
 const corsHeaders = {
@@ -142,8 +142,8 @@ serve(async (req) => {
       );
     }
 
-    // Assuming 6 decimals
-    const amount = BigInt(Math.floor(totalToClaim * 1_000_000000));
+    // JIET token has 6 decimals
+    const amount = BigInt(Math.floor(totalToClaim * 1_000_000));
     console.log(`💸 Transferring ${totalToClaim} JIET (${amount.toString()} smallest units)`);
 
     transaction.add(
