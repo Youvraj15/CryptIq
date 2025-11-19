@@ -2,7 +2,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
-import { Connection, Keypair, PublicKey, Transaction } from "https://esm.sh/@solana/web3.js@1.98.0";
+import { Connection, Keypair, PublicKey, Transaction } from "https://esm.sh/@solana/web3.js@1.98.4";
 import { 
   TOKEN_PROGRAM_ID,
   TOKEN_2022_PROGRAM_ID,
@@ -24,7 +24,7 @@ const JIET_TOKEN_MINT = "mntS6ZetAcdw5dLFFtLw3UEX3BZW5RkDPamSpEmpSbP";
 // Define a fixed reward amount per quiz
 const QUIZ_REWARD_AMOUNT = 10; // 10 JIET tokens
 const MIN_SCORE_TO_CLAIM = 70; // Must score 70% or higher
-const TOKEN_DECIMALS = 9; // JIET token uses 9 decimals
+const TOKEN_DECIMALS = 6; // JIET token uses 6 decimals
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -177,7 +177,7 @@ serve(async (req) => {
         jiet_amount: QUIZ_REWARD_AMOUNT,
         wallet_address: walletAddress,
         transaction_signature: signature
-      }, { onConflict: ['user_id', 'quiz_id'] });
+      }, { onConflict: 'user_id,quiz_id' });
 
     if (updateError) throw updateError;
 
