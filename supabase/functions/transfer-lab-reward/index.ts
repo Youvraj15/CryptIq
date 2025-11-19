@@ -20,7 +20,7 @@ const corsHeaders = {
 
 const JIET_TOKEN_MINT = "mntS6ZetAcdw5dLFFtLw3UEX3BZW5RkDPamSpEmpSbP";
 const LAB_REWARD_AMOUNT = 15; // 15 JIET tokens per lab task
-const TOKEN_DECIMALS = 9;
+const TOKEN_DECIMALS = 6; // JIET token uses 6 decimals
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
