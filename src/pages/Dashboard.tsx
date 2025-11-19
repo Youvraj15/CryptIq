@@ -280,7 +280,7 @@ useEffect(() => {
       
       // Method 1: Using the database function (recommended)
       const { data: functionData, error: functionError} = await supabaseDb
-        .rpc('get_leaderboard', { limit_count: 10 });
+        .rpc('get_leaderboard', { limit_count: 5 });
 
       if (!functionError && functionData) {
         const leaderboardData: LeaderboardEntry[] = (functionData as any[]).map((entry: any) => ({
@@ -305,7 +305,7 @@ useEffect(() => {
         .from('user_stats')
         .select('user_id, total_xp')
         .order('total_xp', { ascending: false })
-        .limit(10);
+        .limit(5);
 
       if (statsError) {
         console.error('Stats query error:', statsError);
@@ -470,29 +470,29 @@ useEffect(() => {
   }
 
   return (
-    <div className="space-y-8 max-w-7xl mx-auto">
+    <div className="space-y-4 sm:space-y-6 md:space-y-8 max-w-7xl mx-auto p-2 sm:p-4">
       {/* Welcome Header */}
-      <div className="space-y-2">
-        <h1 className="text-4xl font-bold text-foreground">
+      <div className="space-y-1 sm:space-y-2">
+        <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-foreground">
           Welcome back, {displayName}! 👋
         </h1>
-        <p className="text-muted-foreground text-lg">
+        <p className="text-muted-foreground text-sm sm:text-base md:text-lg">
           Track your progress and keep learning
         </p>
       </div>
 
       {/* Main Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
         {/* Left Column - Profile & Stats */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="lg:col-span-2 space-y-4 sm:space-y-6">
           {/* Profile Card */}
           <Card className="border-2 overflow-hidden">
-            <CardContent className="p-6">
-              <div className="flex items-start gap-6">
-                <div className="relative group">
-                  <Avatar className="w-24 h-24 ring-4 ring-primary/10">
+            <CardContent className="p-4 sm:p-6">
+              <div className="flex flex-col sm:flex-row items-start gap-4 sm:gap-6">
+                <div className="relative group mx-auto sm:mx-0">
+                  <Avatar className="w-20 h-20 sm:w-24 sm:h-24 ring-4 ring-primary/10">
                     <AvatarImage src={profile.avatar_url} />
-                    <AvatarFallback className="bg-gradient-to-br from-primary/20 to-accent/20 text-2xl font-bold">
+                    <AvatarFallback className="bg-gradient-to-br from-primary/20 to-accent/20 text-xl sm:text-2xl font-bold">
                       {displayName.charAt(0).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
@@ -515,13 +515,13 @@ useEffect(() => {
                     disabled={uploadingAvatar}
                   />
                 </div>
-                <div className="flex-1 space-y-4">
+                <div className="flex-1 space-y-3 sm:space-y-4 w-full">
                   <div className="flex items-start justify-between">
-                    <div>
-                      <h2 className="text-2xl font-bold text-foreground">
+                    <div className="text-center sm:text-left flex-1">
+                      <h2 className="text-xl sm:text-2xl font-bold text-foreground">
                         {displayName}
                       </h2>
-                      <p className="text-sm text-muted-foreground">{user?.email}</p>
+                      <p className="text-xs sm:text-sm text-muted-foreground truncate">{user?.email}</p>
                     </div>
                     <Button
                       variant="ghost"
@@ -548,7 +548,7 @@ useEffect(() => {
                   </div>
 
                   {/* Quick Stats */}
-                  <div className="flex items-center gap-6 text-sm">
+                  <div className="flex flex-wrap items-center gap-3 sm:gap-6 text-xs sm:text-sm justify-center sm:justify-start">
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
                         <Trophy className="w-4 h-4 text-primary" />
@@ -607,13 +607,13 @@ useEffect(() => {
         {/* Right Column - Leaderboard */}
         <div className="lg:col-span-1">
           <Card className="border-2">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Award className="w-5 h-5 text-primary" />
-                Leaderboard
+            <CardHeader className="p-4 sm:p-6">
+              <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
+                <Award className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
+                Top 5 Leaderboard
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-2 sm:space-y-3 p-4 sm:p-6">
               {leaderboard.length === 0 ? (
                 <p className="text-center text-muted-foreground py-8">
                   No leaderboard data yet
@@ -622,15 +622,15 @@ useEffect(() => {
                 leaderboard.map((entry) => (
                   <div
                     key={entry.user_id}
-                    className={`flex items-center justify-between p-4 rounded-xl transition-all ${
+                    className={`flex items-center justify-between p-3 sm:p-4 rounded-xl transition-all ${
                       entry.isCurrentUser
                         ? 'bg-primary/10 border-2 border-primary/50'
                         : 'bg-muted/50 hover:bg-muted'
                     }`}
                   >
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2 sm:gap-3">
                       <div
-                        className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
+                        className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center font-bold text-xs sm:text-sm ${
                           entry.rank === 1
                             ? 'bg-yellow-500/20 text-yellow-600'
                             : entry.rank === 2
@@ -642,21 +642,21 @@ useEffect(() => {
                       >
                         {entry.rank}
                       </div>
-                      <Avatar className="w-8 h-8">
+                      <Avatar className="w-7 h-7 sm:w-8 sm:h-8">
                         <AvatarImage src={entry.avatar_url} />
                         <AvatarFallback className="text-xs">
                           {entry.username.charAt(0).toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
-                      <span className={`font-medium ${entry.isCurrentUser ? 'text-foreground' : 'text-muted-foreground'}`}>
+                      <span className={`font-medium text-xs sm:text-sm truncate max-w-[100px] sm:max-w-none ${entry.isCurrentUser ? 'text-foreground' : 'text-muted-foreground'}`}>
                         {entry.username}
                       </span>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <span className={`font-semibold ${entry.isCurrentUser ? 'text-primary' : 'text-foreground'}`}>
+                    <div className="flex items-center gap-0.5 sm:gap-1">
+                      <span className={`font-semibold text-sm sm:text-base ${entry.isCurrentUser ? 'text-primary' : 'text-foreground'}`}>
                         {entry.total_xp}
                       </span>
-                      <span className="text-xs text-muted-foreground">XP</span>
+                      <span className="text-xs text-muted-foreground hidden sm:inline">XP</span>
                     </div>
                   </div>
                 ))

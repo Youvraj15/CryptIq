@@ -456,13 +456,13 @@ const Rewards = () => {
   const progressToNext = (jietBalance / nextMilestone) * 100;
 
   return (
-    <div className="space-y-8 max-w-7xl mx-auto">
+    <div className="space-y-4 sm:space-y-6 md:space-y-8 max-w-7xl mx-auto p-2 sm:p-0">
       {/* Header */}
-      <div className="space-y-2">
-        <h1 className="text-4xl font-bold text-foreground">
+      <div className="space-y-1 sm:space-y-2">
+        <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-foreground">
           Rewards & Achievements 🏆
         </h1>
-        <p className="text-muted-foreground text-lg">
+        <p className="text-muted-foreground text-sm sm:text-base md:text-lg">
           Track your progress and redeem exclusive rewards
         </p>
       </div>

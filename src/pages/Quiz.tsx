@@ -470,11 +470,11 @@ const handleClaimReward = async (quizId: number, score: number) => {
   const selectedQuizData = quizzes.find(q => q.id === selectedQuiz);
 
   return (
-    <div className="space-y-8 max-w-7xl mx-auto">
+    <div className="space-y-4 sm:space-y-6 md:space-y-8 max-w-7xl mx-auto p-2 sm:p-0">
       {/* Header */}
-      <div className="space-y-2">
-        <h1 className="text-4xl font-bold text-foreground">Quiz Arena 🎯</h1>
-        <p className="text-muted-foreground text-lg">
+      <div className="space-y-1 sm:space-y-2">
+        <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-foreground">Quiz Arena 🎯</h1>
+        <p className="text-muted-foreground text-sm sm:text-base md:text-lg">
           Test your crypto knowledge and earn XP
         </p>
       </div>
@@ -583,7 +583,7 @@ const handleClaimReward = async (quizId: number, score: number) => {
       </div>
 
       {/* Quiz Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
         {quizzes.map((quiz) => {
           const userScore = quizScores[quiz.id];
           const isAttempted = userScore !== undefined;
@@ -595,11 +595,11 @@ const handleClaimReward = async (quizId: number, score: number) => {
               key={quiz.id} 
               className="border-2 hover:border-primary/50 transition-all group"
             >
-              <CardContent className="p-6">
-                <div className="flex justify-between items-start mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-primary/10 to-accent/10 flex items-center justify-center group-hover:scale-110 transition-transform">
-                      <BookOpen className="w-7 h-7 text-primary" />
+              <CardContent className="p-4 sm:p-6">
+                <div className="flex justify-between items-start mb-3 sm:mb-4">
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-gradient-to-br from-primary/10 to-accent/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                      <BookOpen className="w-6 h-6 sm:w-7 sm:h-7 text-primary" />
                     </div>
                     {isCompleted && ( // Show checkmark only if passed
                       <CheckCircle className="w-6 h-6 text-green-500" />
