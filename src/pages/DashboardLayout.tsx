@@ -1,6 +1,6 @@
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
-import { Outlet } from "react-router-dom";
+import { Outlet, Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { LogOut, User, Coins, Unplug } from "lucide-react";
@@ -10,7 +10,7 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { useJietBalance } from "@/hooks/useJietBalance";
 
 export default function DashboardLayout() {
-  const { user, signOut } = useAuth();
+  const { user, loading, signOut } = useAuth();
   const [username, setUsername] = useState<string>('');
   const { connected, disconnect } = useWallet();
   const { balance: jietBalance } = useJietBalance();
@@ -28,13 +28,28 @@ export default function DashboardLayout() {
       if (data) {
         setUsername(data.username || data.full_name || user.email?.split('@')[0] || 'User');
       } else if (!error) {
-        // Fallback to email username part
         setUsername(user.email?.split('@')[0] || 'User');
       }
     };
 
     fetchProfile();
   }, [user]);
+
+  // Redirect to login if not authenticated
+  if (loading) {
+    return (
+      <div className="dark min-h-screen bg-background flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-10 h-10 border-4 border-accent border-t-transparent rounded-full animate-spin" />
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
 
   return (
     <div className="dark min-h-screen bg-background">
