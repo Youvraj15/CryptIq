@@ -40,12 +40,6 @@ const LandingPage = () => {
     }
   ];
 
-  const stats = [
-    { value: '500+', label: 'Active Learners' },
-    { value: '50+', label: 'Quizzes Available' },
-    { value: '20+', label: 'Hands-on Labs' },
-    { value: '10K+', label: 'JIET Distributed' }
-  ];
 
   const howItWorks = [
     {
@@ -122,15 +116,6 @@ const LandingPage = () => {
                 </Link>
               </div>
 
-              {/* Quick Stats */}
-              <div className="flex flex-wrap justify-center lg:justify-start gap-8 pt-8">
-                {stats.map((stat, index) => (
-                  <div key={index} className="text-center">
-                    <div className="text-2xl sm:text-3xl font-bold text-accent">{stat.value}</div>
-                    <div className="text-sm text-muted-foreground">{stat.label}</div>
-                  </div>
-                ))}
-              </div>
             </div>
 
             {/* Right Content - Illustration */}
