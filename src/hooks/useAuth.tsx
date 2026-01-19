@@ -45,11 +45,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Auto-redirect to dashboard only from auth pages
+  // Auto-redirect to dashboard only from auth pages (not landing page)
   useEffect(() => {
     if (user && !loading) {
       const currentPath = window.location.pathname;
-      if (currentPath === '/' || currentPath === '/login' || currentPath === '/register' || currentPath === '/verify-otp') {
+      // Only redirect from explicit auth pages, not the landing page
+      if (currentPath === '/login' || currentPath === '/register' || currentPath === '/verify-otp') {
         navigate('/dashboard');
       }
     }
